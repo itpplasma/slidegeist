@@ -13,7 +13,6 @@ from slidegeist.constants import (
 )
 from slidegeist.export import export_srt
 from slidegeist.ffmpeg import detect_scenes, get_video_duration
-from slidegeist.manifest import create_manifest, save_manifest
 from slidegeist.slides import extract_slides
 from slidegeist.transcribe import transcribe_video
 
@@ -107,7 +106,6 @@ def process_video(
         results['slides'] = [path for _, _, _, path in slide_metadata]
 
     # Step 3: Transcription
-    transcript_data = None
     if not skip_transcription:
         logger.info("=" * 60)
         logger.info("STEP 3: Audio Transcription")
@@ -119,48 +117,10 @@ def process_video(
             device=device
         )
 
-        # Step 4: Export SRT (optional, legacy format)
-        logger.info("=" * 60)
-        logger.info("STEP 4: Export SRT (legacy)")
-        logger.info("=" * 60)
-
-        srt_path = output_dir / "transcript.srt"
+        # Export SRT
+        srt_path = slidegeist_dir / "transcript.srt"
         export_srt(transcript_data['segments'], srt_path)
-        results['srt'] = srt_path
-
-    # Step 5: Generate JSON manifest (primary output)
-    logger.info("=" * 60)
-    logger.info("STEP 5: Generate JSON Manifest")
-    logger.info("=" * 60)
-
-    # Convert slide metadata to relative paths for manifest
-    manifest_slides = []
-    for idx, t_start, t_end, abs_path in slide_metadata:
-        rel_path = f"slides/{abs_path.name}"
-        manifest_slides.append((idx, t_start, t_end, rel_path))
-
-    # Build detector config string
-    detector_config = f"pixel-diff(threshold={scene_threshold},min_scene_len={min_scene_len})"
-
-    manifest = create_manifest(
-        video_path=video_path,
-        duration=duration,
-        language=transcript_data.get('language', 'unknown') if transcript_data else 'unknown',
-        model_name=model,
-        compute_type='int8',  # Default for CPU
-        vad_threshold=0.50,
-        beam_size=5,
-        max_segment_length=30,
-        detector_config=detector_config,
-        segments=transcript_data.get('segments', []) if transcript_data else [],
-        slides=manifest_slides,
-        compute_hashes=False,  # Disabled for speed
-    )
-
-    manifest_path = slidegeist_dir / "index.json"
-    save_manifest(manifest, manifest_path)
-    results['manifest'] = manifest_path
-    logger.info(f"Saved manifest: {manifest_path}")
+        results['transcript'] = srt_path
 
     # Summary
     logger.info("=" * 60)
@@ -169,8 +129,7 @@ def process_video(
     if not skip_slides:
         logger.info(f"✓ Extracted {len(slide_metadata)} slides")
     if not skip_transcription:
-        logger.info(f"✓ Transcribed {len(transcript_data['segments'])} segments")
-    logger.info(f"✓ Generated manifest: {manifest_path.name}")
+        logger.info(f"✓ Transcribed and saved SRT")
     logger.info(f"✓ All outputs in: {slidegeist_dir}")
 
     return results

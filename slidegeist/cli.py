@@ -70,12 +70,10 @@ def handle_process(args: argparse.Namespace) -> None:
         print("✓ Processing complete!")
         print("=" * 60)
         if 'slides' in result:
-            print(f"  Slides:     {len(result['slides'])} images")  # type: ignore
-        if 'srt' in result:
-            print(f"  SRT:        {result['srt']}")
-        if 'manifest' in result:
-            print(f"  Manifest:   {result['manifest']}")
-        print(f"  Output dir: {result['output_dir']}")
+            print(f"  Slides:      {len(result['slides'])} images")  # type: ignore
+        if 'transcript' in result:
+            print(f"  Transcript:  {result['transcript']}")
+        print(f"  Output dir:  {result['output_dir']}")
         print("=" * 60)
 
     except FileNotFoundError as e:
@@ -103,7 +101,6 @@ def handle_slides(args: argparse.Namespace) -> None:
         )
 
         print(f"\n✓ Extracted {len(result['slides'])} slides")  # type: ignore
-        print(f"  Manifest:   {result['manifest']}")
         print(f"  Output dir: {result['output_dir']}")
 
     except Exception as e:
@@ -126,10 +123,9 @@ def handle_transcribe(args: argparse.Namespace) -> None:
         )
 
         print(f"\n✓ Transcription complete")
-        if 'srt' in result:
-            print(f"  SRT:        {result['srt']}")
-        print(f"  Manifest:   {result['manifest']}")
-        print(f"  Output dir: {result['output_dir']}")
+        if 'transcript' in result:
+            print(f"  Transcript:  {result['transcript']}")
+        print(f"  Output dir:  {result['output_dir']}")
 
     except Exception as e:
         logger.error(f"Transcription failed: {e}")
