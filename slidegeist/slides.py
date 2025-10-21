@@ -8,17 +8,19 @@ from slidegeist.ffmpeg import extract_frame, get_video_duration
 logger = logging.getLogger(__name__)
 
 
-def format_timestamp_filename(start_ms: int, end_ms: int) -> str:
-    """Format timestamps for slide filename.
+def format_slide_filename(index: int, total_slides: int) -> str:
+    """Format zero-padded slide filename.
 
     Args:
-        start_ms: Start timestamp in milliseconds.
-        end_ms: End timestamp in milliseconds.
+        index: Slide index (0-based).
+        total_slides: Total number of slides (for padding calculation).
 
     Returns:
-        Formatted string like '000125300-000287600'
+        Formatted string like 'slide_000' or 'slide_0042'
     """
-    return f"{start_ms:09d}-{end_ms:09d}"
+    # Determine padding based on total slides
+    padding = max(3, len(str(total_slides - 1)))
+    return f"slide_{index:0{padding}d}"
 
 
 def extract_slides(
@@ -26,11 +28,11 @@ def extract_slides(
     scene_timestamps: list[float],
     output_dir: Path,
     image_format: str = "jpg"
-) -> list[Path]:
+) -> list[tuple[int, float, float, Path]]:
     """Extract slides from video at scene change timestamps.
 
-    Each slide is extracted shortly after the scene change (after transition
-    frames settle). Filenames include start and end timestamps.
+    Each slide is extracted at 80% through the segment to capture complete content.
+    Returns metadata for each slide including index, time range, and file path.
 
     Args:
         video_path: Path to the video file.
@@ -39,7 +41,7 @@ def extract_slides(
         image_format: Image format ('jpg' or 'png').
 
     Returns:
-        List of paths to extracted slide images, in chronological order.
+        List of (index, t_start, t_end, image_path) tuples in chronological order.
 
     Raises:
         ValueError: If timestamps are not sorted or contain invalid values.
@@ -58,11 +60,12 @@ def extract_slides(
     # Last segment: last scene change to end
     boundaries = [0.0] + scene_timestamps + [duration]
 
-    slide_paths: list[Path] = []
+    slide_data: list[tuple[int, float, float, Path]] = []
+    total_slides = len(boundaries) - 1
 
-    logger.info(f"Extracting {len(boundaries) - 1} slides")
+    logger.info(f"Extracting {total_slides} slides")
 
-    for i in range(len(boundaries) - 1):
+    for i in range(total_slides):
         start_time = boundaries[i]
         end_time = boundaries[i + 1]
         segment_duration = end_time - start_time
@@ -86,13 +89,9 @@ def extract_slides(
         # Clamp extract_time to video duration (avoid ffmpeg seeking beyond end)
         extract_time = min(extract_time, duration - 0.1)
 
-        # Convert to milliseconds for filename
-        start_ms = int(start_time * 1000)
-        end_ms = int(end_time * 1000)
-
-        # Create filename with timestamp range
-        timestamp_str = format_timestamp_filename(start_ms, end_ms)
-        filename = f"slide_{timestamp_str}.{image_format}"
+        # Create indexed filename
+        filename_base = format_slide_filename(i, total_slides)
+        filename = f"{filename_base}.{image_format}"
         output_path = output_dir / filename
 
         logger.debug(
@@ -101,7 +100,7 @@ def extract_slides(
         )
 
         extract_frame(video_path, extract_time, output_path, image_format)
-        slide_paths.append(output_path)
+        slide_data.append((i, start_time, end_time, output_path))
 
-    logger.info(f"Extracted {len(slide_paths)} slides to {output_dir}")
-    return slide_paths
+    logger.info(f"Extracted {len(slide_data)} slides to {output_dir}")
+    return slide_data
