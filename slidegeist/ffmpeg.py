@@ -1,7 +1,6 @@
 """FFmpeg wrapper for video processing and scene detection."""
 
 import logging
-import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -56,62 +55,50 @@ def get_video_duration(video_path: Path) -> float:
 
 
 def detect_scenes(video_path: Path, threshold: float = DEFAULT_SCENE_THRESHOLD) -> list[float]:
-    """Detect scene changes in a video using FFmpeg's scene filter.
+    """Detect scene changes in a video using PySceneDetect.
 
     Args:
         video_path: Path to the video file.
-        threshold: Scene detection threshold (0.0-1.0). Higher values mean
-                  fewer scene changes detected. Default works well for most slides
-                  including handwritten content.
+        threshold: Scene detection threshold (lower = more sensitive).
+                  Default 27.0 works well for most content including handwritten slides.
 
     Returns:
         List of timestamps (in seconds) where scene changes occur, sorted.
 
     Raises:
-        FFmpegError: If FFmpeg is not available or processing fails.
-        ValueError: If threshold is not in valid range.
+        FFmpegError: If video file not found or processing fails.
     """
-    if not check_ffmpeg_available():
-        raise FFmpegError("FFmpeg not found. Please install FFmpeg.")
-
     if not video_path.exists():
         raise FFmpegError(f"Video file not found: {video_path}")
 
-    if not 0.0 <= threshold <= 1.0:
-        raise ValueError(f"Scene threshold must be between 0.0 and 1.0, got {threshold}")
+    try:
+        from scenedetect import ContentDetector, detect  # type: ignore[import-untyped]
+    except ImportError:
+        raise FFmpegError(
+            "PySceneDetect not installed. Install with: pip install scenedetect[opencv]"
+        )
 
     logger.info(f"Detecting scenes with threshold {threshold}")
 
-    cmd = [
-        "ffmpeg",
-        "-i", str(video_path),
-        "-vf", f"select='gt(scene,{threshold})',showinfo",
-        "-f", "null",
-        "-"
-    ]
-
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        # Scene detection info is in stderr
-        if result.returncode != 0:
-            raise FFmpegError(f"FFmpeg scene detection failed: {result.stderr}")
-        output = result.stderr
-    except subprocess.SubprocessError as e:
-        raise FFmpegError(f"Failed to run FFmpeg: {e}")
+        # Use ContentDetector for content-aware scene detection
+        # This is better for gradual changes like handwritten slides
+        scene_list = detect(str(video_path), ContentDetector(threshold=threshold))
 
-    # Parse timestamps from showinfo output
-    # Looking for lines like: pts_time:125.333
-    timestamps = []
-    pattern = re.compile(r"pts_time:(\d+\.?\d*)")
+        # Extract start times (in seconds) from scene list
+        # scene_list contains tuples of (start_time, end_time)
+        timestamps = [scene[0].get_seconds() for scene in scene_list]
 
-    for match in pattern.finditer(output):
-        timestamp = float(match.group(1))
-        timestamps.append(timestamp)
+        # Skip the first timestamp (0.0) as it's the start of the video
+        if timestamps and timestamps[0] == 0.0:
+            timestamps = timestamps[1:]
 
-    timestamps.sort()
-    logger.info(f"Found {len(timestamps)} scene changes")
+        timestamps.sort()
+        logger.info(f"Found {len(timestamps)} scene changes")
 
-    return timestamps
+        return timestamps
+    except Exception as e:
+        raise FFmpegError(f"Scene detection failed: {e}")
 
 
 def extract_frame(

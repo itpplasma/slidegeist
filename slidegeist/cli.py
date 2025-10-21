@@ -183,7 +183,7 @@ Examples:
         type=float,
         default=DEFAULT_SCENE_THRESHOLD,
         metavar="NUM",
-        help=f"Scene detection threshold 0.0-1.0 (default: {DEFAULT_SCENE_THRESHOLD})"
+        help=f"Scene detection threshold, lower = more sensitive (default: {DEFAULT_SCENE_THRESHOLD})"
     )
     process_parser.add_argument(
         "--model",
@@ -225,7 +225,7 @@ Examples:
         type=float,
         default=DEFAULT_SCENE_THRESHOLD,
         metavar="NUM",
-        help=f"Scene detection threshold 0.0-1.0 (default: {DEFAULT_SCENE_THRESHOLD})"
+        help=f"Scene detection threshold, lower = more sensitive (default: {DEFAULT_SCENE_THRESHOLD})"
     )
     slides_parser.add_argument(
         "--format",
