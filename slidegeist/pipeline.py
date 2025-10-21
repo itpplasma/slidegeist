@@ -7,6 +7,7 @@ from slidegeist.constants import (
     DEFAULT_DEVICE,
     DEFAULT_IMAGE_FORMAT,
     DEFAULT_MIN_SCENE_LEN,
+    DEFAULT_OUTPUT_DIR,
     DEFAULT_SCENE_THRESHOLD,
     DEFAULT_START_OFFSET,
     DEFAULT_WHISPER_MODEL,
@@ -58,17 +59,20 @@ def process_video(
     if not video_path.exists():
         raise FileNotFoundError(f"Video file not found: {video_path}")
 
+    # Use video filename (without extension) as default output directory
+    if output_dir == Path(DEFAULT_OUTPUT_DIR):
+        output_dir = Path.cwd() / video_path.stem
+
     logger.info(f"Processing video: {video_path}")
     logger.info(f"Output directory: {output_dir}")
 
-    # Create slidegeist subdirectory structure
-    slidegeist_dir = output_dir / "slidegeist"
-    slides_dir = slidegeist_dir / "slides"
-    slidegeist_dir.mkdir(parents=True, exist_ok=True)
+    # Create output directory structure
+    slides_dir = output_dir / "slides"
+    output_dir.mkdir(parents=True, exist_ok=True)
     slides_dir.mkdir(parents=True, exist_ok=True)
 
     results: dict[str, Path | list[Path]] = {
-        'output_dir': slidegeist_dir
+        'output_dir': output_dir
     }
 
     # Get video duration
@@ -118,7 +122,7 @@ def process_video(
         )
 
         # Export SRT
-        srt_path = slidegeist_dir / "transcript.srt"
+        srt_path = output_dir / "transcript.srt"
         export_srt(transcript_data['segments'], srt_path)
         results['transcript'] = srt_path
 
@@ -130,7 +134,7 @@ def process_video(
         logger.info(f"✓ Extracted {len(slide_metadata)} slides")
     if not skip_transcription:
         logger.info(f"✓ Transcribed and saved SRT")
-    logger.info(f"✓ All outputs in: {slidegeist_dir}")
+    logger.info(f"✓ All outputs in: {output_dir}")
 
     return results
 
