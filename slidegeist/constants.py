@@ -1,9 +1,10 @@
 """Constants used across the slidegeist package."""
 
-# Scene detection - Histogram-based (optimized for presentation videos)
-DEFAULT_SCENE_THRESHOLD = 25.0  # Histogram correlation threshold (0-100 scale, lower = more sensitive)
-                                # Typical range: 20-30 for presentations (maps to 0.70-0.80 correlation)
-DEFAULT_MIN_SCENE_LEN = 0.5  # Minimum scene length in seconds (filters rapid mouse clicks)
+# Scene detection - Global Pixel Difference (research-proven best method)
+DEFAULT_SCENE_THRESHOLD = 0.03  # Normalized pixel difference threshold (0-1 scale)
+                                # Based on research: 0.03 optimal for lecture videos
+                                # Lower = more sensitive. Typical range: 0.02-0.05
+DEFAULT_MIN_SCENE_LEN = 0.5  # Minimum scene length in seconds (filters rapid clicks)
 DEFAULT_START_OFFSET = 3.0  # Skip first N seconds to avoid mouse movement during setup
 
 # Whisper transcription

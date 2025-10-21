@@ -64,18 +64,19 @@ def detect_scenes(
     min_scene_len: float = DEFAULT_MIN_SCENE_LEN,
     start_offset: float = DEFAULT_START_OFFSET
 ) -> list[float]:
-    """Detect slide changes in a video using histogram comparison.
+    """Detect slide changes in a video using Global Pixel Difference.
 
-    Uses OpenCV histogram correlation to detect page flips while ignoring
-    gradual handwriting changes. Optimized for presentation videos.
+    Uses pixel-level differencing on binarized frames to detect content changes.
+    Research shows this is the most effective method for lecture videos.
 
-    Based on research: "Automatic detection of slide transitions in lecture videos"
+    Based on research: "An experimental comparative study on slide change detection
+    in lecture videos" (Eruvaram et al., 2018)
 
     Args:
         video_path: Path to the video file.
-        threshold: Scene detection threshold (0-100 scale).
-                  Lower = more sensitive. Default 25 -> 0.75 correlation.
-                  Typical range: 20-30 for presentations.
+        threshold: Scene detection threshold (0-1 scale, normalized pixel difference).
+                  Lower = more sensitive. Default 0.03 from research.
+                  Typical range: 0.02-0.05 for presentations.
         min_scene_len: Minimum scene length in seconds (filters rapid clicks).
         start_offset: Skip first N seconds to avoid mouse movement during setup.
 
@@ -88,14 +89,18 @@ def detect_scenes(
     if not video_path.exists():
         raise FFmpegError(f"Video file not found: {video_path}")
 
-    # Use TransNetV2 neural network (state-of-the-art shot boundary detection)
-    # Paper: https://arxiv.org/abs/2008.04838
-    from slidegeist.transnet_detector import detect_slides_transnet
+    # Use Global Pixel Difference method
+    # Research: Best performance for lecture videos (high recall and precision)
+    from slidegeist.pixel_diff_detector import detect_slides_pixel_diff
 
-    return detect_slides_transnet(
+    # Convert threshold from 0-100 scale to 0-1 scale
+    normalized_threshold = threshold / 1000.0 if threshold > 1.0 else threshold
+
+    return detect_slides_pixel_diff(
         video_path,
         start_offset=start_offset,
-        min_scene_len=min_scene_len
+        min_scene_len=min_scene_len,
+        threshold=normalized_threshold
     )
 
 
