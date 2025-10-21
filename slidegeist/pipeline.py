@@ -12,7 +12,7 @@ from slidegeist.constants import (
     DEFAULT_START_OFFSET,
     DEFAULT_WHISPER_MODEL,
 )
-from slidegeist.export import export_srt
+from slidegeist.export import export_slides_json
 from slidegeist.ffmpeg import detect_scenes
 from slidegeist.slides import extract_slides
 from slidegeist.transcribe import transcribe_video
@@ -107,6 +107,7 @@ def process_video(
         results['slides'] = [path for _, _, _, path in slide_metadata]
 
     # Step 3: Transcription
+    transcript_segments = []
     if not skip_transcription:
         logger.info("=" * 60)
         logger.info("STEP 3: Audio Transcription")
@@ -117,11 +118,23 @@ def process_video(
             model_size=model,
             device=device
         )
+        transcript_segments = transcript_data['segments']
 
-        # Export SRT
-        srt_path = output_dir / "transcript.srt"
-        export_srt(transcript_data['segments'], srt_path)
-        results['transcript'] = srt_path
+    # Step 4: Export slides.json (if both slides and transcription were done)
+    if not skip_slides and not skip_transcription:
+        logger.info("=" * 60)
+        logger.info("STEP 4: Export slides.json")
+        logger.info("=" * 60)
+
+        json_path = output_dir / "slides.json"
+        export_slides_json(
+            video_path,
+            slide_metadata,
+            transcript_segments,
+            json_path,
+            model
+        )
+        results['slides_json'] = json_path
 
     # Summary
     logger.info("=" * 60)
@@ -130,7 +143,9 @@ def process_video(
     if not skip_slides:
         logger.info(f"✓ Extracted {len(slide_metadata)} slides")
     if not skip_transcription:
-        logger.info("✓ Transcribed and saved SRT")
+        logger.info("✓ Transcribed audio")
+    if not skip_slides and not skip_transcription:
+        logger.info("✓ Created slides.json with transcript")
     logger.info(f"✓ All outputs in: {output_dir}")
 
     return results

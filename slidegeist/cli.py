@@ -90,8 +90,8 @@ def handle_process(args: argparse.Namespace) -> None:
         print("=" * 60)
         if 'slides' in result:
             print(f"  Slides:      {len(result['slides'])} images")  # type: ignore
-        if 'transcript' in result:
-            print(f"  Transcript:  {result['transcript']}")
+        if 'slides_json' in result:
+            print(f"  slides.json: {result['slides_json']}")
         print(f"  Output dir:  {result['output_dir']}")
         print("=" * 60)
 

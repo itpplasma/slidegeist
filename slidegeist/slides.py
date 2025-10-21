@@ -33,7 +33,7 @@ def format_slide_filename(index: int, total_slides: int, t_start: float, t_end: 
         t_end: End time in seconds.
 
     Returns:
-        Formatted string like 'slide_000_00:00:00-00:00:10' or 'slide_042_01:23:45-02:15:30'
+        Formatted string like 'slide_000_00:00:00-00:02:05' or 'slide_042_01:01:01-01:02:02'
     """
     # Determine padding based on total slides
     padding = max(3, len(str(total_slides - 1)))

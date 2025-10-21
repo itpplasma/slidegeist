@@ -1,6 +1,8 @@
-"""Export transcripts to subtitle formats."""
+"""Export slides with transcripts to JSON format."""
 
+import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 from slidegeist.transcribe import Segment
@@ -8,56 +10,74 @@ from slidegeist.transcribe import Segment
 logger = logging.getLogger(__name__)
 
 
-def format_timestamp_srt(seconds: float) -> str:
-    """Format seconds to SRT timestamp format: HH:MM:SS,mmm
+def export_slides_json(
+    video_path: Path,
+    slide_metadata: list[tuple[int, float, float, Path]],
+    transcript_segments: list[Segment],
+    output_path: Path,
+    model: str
+) -> None:
+    """Export slides with their transcripts to JSON format.
 
     Args:
-        seconds: Time in seconds (can include fractional seconds).
+        video_path: Path to the source video file.
+        slide_metadata: List of (index, t_start, t_end, image_path) tuples.
+        transcript_segments: List of Whisper transcript segments.
+        output_path: Path where the JSON file will be saved.
+        model: Whisper model used for transcription.
 
-    Returns:
-        Formatted timestamp string like '00:02:05,300'
-    """
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    secs = int(seconds % 60)
-    millis = int((seconds % 1) * 1000)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
-
-
-def export_srt(segments: list[Segment], output_path: Path) -> None:
-    """Export transcription segments to SRT subtitle format.
-
-    Args:
-        segments: List of transcript segments with start, end, and text.
-        output_path: Path where the SRT file will be saved.
-
-    The SRT format is:
-        sequence_number
-        start_timestamp --> end_timestamp
-        subtitle_text
-        (blank line)
+    The JSON structure groups transcript text by slide time ranges.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"Exporting {len(segments)} segments to SRT: {output_path}")
+    logger.info(f"Creating slides.json with {len(slide_metadata)} slides")
 
+    # Build the slides data structure
+    slides_data = []
+
+    for index, t_start, t_end, image_path in slide_metadata:
+        # Collect all transcript text that falls within this slide's time range
+        transcript_parts = []
+
+        for segment in transcript_segments:
+            seg_start = segment['start']
+            seg_end = segment['end']
+
+            # Check if segment overlaps with slide time range
+            if seg_start < t_end and seg_end > t_start:
+                text = segment['text'].strip()
+                if text:
+                    transcript_parts.append(text)
+
+        # Combine all text for this slide
+        full_transcript = ' '.join(transcript_parts)
+
+        # Make image path relative to output directory
+        relative_path = image_path.relative_to(output_path.parent)
+
+        slide_entry = {
+            "slide_number": index,
+            "image_path": str(relative_path),
+            "time_start": int(t_start),
+            "time_end": int(t_end),
+            "transcript": full_transcript
+        }
+
+        slides_data.append(slide_entry)
+
+    # Build final JSON structure
+    json_data = {
+        "metadata": {
+            "video_file": video_path.name,
+            "duration_seconds": int(slide_metadata[-1][2]) if slide_metadata else 0,
+            "processed_at": datetime.now(timezone.utc).isoformat(),
+            "model": model
+        },
+        "slides": slides_data
+    }
+
+    # Write JSON file
     with output_path.open('w', encoding='utf-8') as f:
-        for i, segment in enumerate(segments, start=1):
-            # Sequence number
-            f.write(f"{i}\n")
+        json.dump(json_data, f, indent=2, ensure_ascii=False)
 
-            # Timestamps
-            start = format_timestamp_srt(segment['start'])
-            end = format_timestamp_srt(segment['end'])
-            f.write(f"{start} --> {end}\n")
-
-            # Text (strip whitespace and ensure it's not empty)
-            text = segment['text'].strip()
-            if not text:
-                text = "[No speech detected]"
-            f.write(f"{text}\n")
-
-            # Blank line separator
-            f.write("\n")
-
-    logger.info(f"SRT export complete: {output_path}")
+    logger.info(f"Exported slides.json: {output_path}")
