@@ -105,7 +105,7 @@ slidegeist transcribe video.mp4
 slidegeist process <video> [options]
 
 Options:
-  --out DIR              Output directory (default: output/)
+  --out DIR              Output directory (default: video filename)
   --scene-threshold NUM  Scene detection sensitivity 0.0-1.0 (default: 0.10)
   --model NAME          Whisper model: tiny, base, small, medium, large, large-v2, large-v3
                         (default: large-v3)

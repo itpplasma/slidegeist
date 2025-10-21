@@ -50,10 +50,29 @@ def check_prerequisites() -> None:
         sys.exit(1)
 
 
+def validate_scene_threshold(threshold: float) -> None:
+    """Validate scene detection threshold is in valid range.
+
+    Args:
+        threshold: Scene detection threshold value.
+
+    Raises:
+        SystemExit: If threshold is out of valid range (0.0-1.0).
+    """
+    if not 0.0 <= threshold <= 1.0:
+        logger.error(f"Invalid scene threshold: {threshold}")
+        logger.error("Scene threshold must be between 0.0 and 1.0")
+        logger.error("  Lower values = more sensitive (detect subtle changes)")
+        logger.error("  Higher values = less sensitive (only major transitions)")
+        logger.error(f"  Recommended range: 0.02-0.15 (default: {DEFAULT_SCENE_THRESHOLD})")
+        sys.exit(1)
+
+
 def handle_process(args: argparse.Namespace) -> None:
     """Handle 'slidegeist process' command."""
     try:
         check_prerequisites()
+        validate_scene_threshold(args.scene_threshold)
 
         result = process_video(
             video_path=args.input,
@@ -90,6 +109,7 @@ def handle_slides(args: argparse.Namespace) -> None:
     """Handle 'slidegeist slides' command."""
     try:
         check_prerequisites()
+        validate_scene_threshold(args.scene_threshold)
 
         result = process_slides_only(
             video_path=args.input,
@@ -142,14 +162,14 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Process video (default: slides + transcript with large-v3 model)
-  slidegeist lecture.mp4
+  # Process video (slides + transcript with large-v3 model)
+  slidegeist process lecture.mp4
 
   # Use smaller/faster model
-  slidegeist lecture.mp4 --model tiny
+  slidegeist process lecture.mp4 --model tiny
 
   # Use GPU explicitly
-  slidegeist lecture.mp4 --device cuda
+  slidegeist process lecture.mp4 --device cuda
 
   # Extract only slides (no transcription)
   slidegeist slides lecture.mp4
@@ -166,198 +186,89 @@ Examples:
     )
 
     parser.add_argument(
-        "input",
-        type=Path,
-        nargs="?",
-        help="Input video file"
-    )
-
-    parser.add_argument(
         "-v", "--verbose",
         action="store_true",
         help="Enable verbose logging"
     )
 
-    parser.add_argument(
-        "--out",
-        type=Path,
-        help="Output directory (default: video filename)"
-    )
-
-    parser.add_argument(
-        "--model",
-        default=DEFAULT_WHISPER_MODEL,
-        choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"],
-        help=f"Whisper model size (default: {DEFAULT_WHISPER_MODEL})"
-    )
-
-    parser.add_argument(
-        "--device",
-        default=DEFAULT_DEVICE,
-        choices=["cpu", "cuda", "auto"],
-        help=f"Processing device (default: {DEFAULT_DEVICE})"
-    )
-
-    parser.add_argument(
-        "--scene-threshold",
-        type=float,
-        default=DEFAULT_SCENE_THRESHOLD,
-        metavar="NUM",
-        help=f"Scene detection threshold (default: {DEFAULT_SCENE_THRESHOLD})"
-    )
-
-    parser.add_argument(
-        "--min-scene-len",
-        type=float,
-        default=DEFAULT_MIN_SCENE_LEN,
-        metavar="SEC",
-        help=f"Minimum scene length in seconds (default: {DEFAULT_MIN_SCENE_LEN})"
-    )
-
-    parser.add_argument(
-        "--start-offset",
-        type=float,
-        default=DEFAULT_START_OFFSET,
-        metavar="SEC",
-        help=f"Skip first N seconds (default: {DEFAULT_START_OFFSET})"
-    )
-
-    parser.add_argument(
-        "--format",
-        default=DEFAULT_IMAGE_FORMAT,
-        choices=["jpg", "png"],
-        help=f"Slide image format (default: {DEFAULT_IMAGE_FORMAT})"
-    )
-
-    subparsers = parser.add_subparsers(dest="command", required=False)
-
-    # Process command (full pipeline) - this is the default
-    process_parser = subparsers.add_parser(
-        "process",
-        help="Process video (extract slides and transcript) [default]"
-    )
-    process_parser.add_argument(
+    # Create parent parsers for common arguments
+    common_parent = argparse.ArgumentParser(add_help=False)
+    common_parent.add_argument(
         "input",
         type=Path,
         help="Input video file"
     )
-    process_parser.add_argument(
+    common_parent.add_argument(
         "--out",
         type=Path,
         default=Path(DEFAULT_OUTPUT_DIR),
-        help=f"Output directory (default: {DEFAULT_OUTPUT_DIR}/)"
+        help=f"Output directory (default: video filename)"
     )
-    process_parser.add_argument(
+
+    slides_parent = argparse.ArgumentParser(add_help=False)
+    slides_parent.add_argument(
         "--scene-threshold",
         type=float,
         default=DEFAULT_SCENE_THRESHOLD,
         metavar="NUM",
         help=f"Scene detection threshold 0.02-0.05, lower=more sensitive (default: {DEFAULT_SCENE_THRESHOLD})"
     )
-    process_parser.add_argument(
+    slides_parent.add_argument(
         "--min-scene-len",
         type=float,
         default=DEFAULT_MIN_SCENE_LEN,
         metavar="SEC",
         help=f"Minimum scene length in seconds (default: {DEFAULT_MIN_SCENE_LEN})"
     )
-    process_parser.add_argument(
+    slides_parent.add_argument(
         "--start-offset",
         type=float,
         default=DEFAULT_START_OFFSET,
         metavar="SEC",
         help=f"Skip first N seconds to avoid mouse movement (default: {DEFAULT_START_OFFSET})"
     )
-    process_parser.add_argument(
+    slides_parent.add_argument(
+        "--format",
+        default=DEFAULT_IMAGE_FORMAT,
+        choices=["jpg", "png"],
+        help=f"Slide image format (default: {DEFAULT_IMAGE_FORMAT})"
+    )
+
+    transcribe_parent = argparse.ArgumentParser(add_help=False)
+    transcribe_parent.add_argument(
         "--model",
         default=DEFAULT_WHISPER_MODEL,
         choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"],
         help=f"Whisper model size (default: {DEFAULT_WHISPER_MODEL})"
     )
-    process_parser.add_argument(
+    transcribe_parent.add_argument(
         "--device",
         default=DEFAULT_DEVICE,
         choices=["cpu", "cuda", "auto"],
         help=f"Processing device (default: {DEFAULT_DEVICE} - uses MLX on Apple Silicon if available)"
     )
-    process_parser.add_argument(
-        "--format",
-        default=DEFAULT_IMAGE_FORMAT,
-        choices=["jpg", "png"],
-        help=f"Slide image format (default: {DEFAULT_IMAGE_FORMAT})"
+
+    subparsers = parser.add_subparsers(dest="command", required=False)
+
+    # Process command (full pipeline)
+    process_parser = subparsers.add_parser(
+        "process",
+        parents=[common_parent, slides_parent, transcribe_parent],
+        help="Process video (extract slides and transcript)"
     )
 
     # Slides command
     slides_parser = subparsers.add_parser(
         "slides",
+        parents=[common_parent, slides_parent],
         help="Extract only slides (no transcription)"
-    )
-    slides_parser.add_argument(
-        "input",
-        type=Path,
-        help="Input video file"
-    )
-    slides_parser.add_argument(
-        "--out",
-        type=Path,
-        default=Path(DEFAULT_OUTPUT_DIR),
-        help=f"Output directory (default: {DEFAULT_OUTPUT_DIR}/)"
-    )
-    slides_parser.add_argument(
-        "--scene-threshold",
-        type=float,
-        default=DEFAULT_SCENE_THRESHOLD,
-        metavar="NUM",
-        help=f"Scene detection threshold 0.02-0.05, lower=more sensitive (default: {DEFAULT_SCENE_THRESHOLD})"
-    )
-    slides_parser.add_argument(
-        "--min-scene-len",
-        type=float,
-        default=DEFAULT_MIN_SCENE_LEN,
-        metavar="SEC",
-        help=f"Minimum scene length in seconds (default: {DEFAULT_MIN_SCENE_LEN})"
-    )
-    slides_parser.add_argument(
-        "--start-offset",
-        type=float,
-        default=DEFAULT_START_OFFSET,
-        metavar="SEC",
-        help=f"Skip first N seconds to avoid mouse movement (default: {DEFAULT_START_OFFSET})"
-    )
-    slides_parser.add_argument(
-        "--format",
-        default=DEFAULT_IMAGE_FORMAT,
-        choices=["jpg", "png"],
-        help=f"Slide image format (default: {DEFAULT_IMAGE_FORMAT})"
     )
 
     # Transcribe command
     transcribe_parser = subparsers.add_parser(
         "transcribe",
+        parents=[common_parent, transcribe_parent],
         help="Extract only transcript (no slides)"
-    )
-    transcribe_parser.add_argument(
-        "input",
-        type=Path,
-        help="Input video file"
-    )
-    transcribe_parser.add_argument(
-        "--out",
-        type=Path,
-        default=Path(DEFAULT_OUTPUT_DIR),
-        help=f"Output directory (default: {DEFAULT_OUTPUT_DIR}/)"
-    )
-    transcribe_parser.add_argument(
-        "--model",
-        default=DEFAULT_WHISPER_MODEL,
-        choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"],
-        help=f"Whisper model size (default: {DEFAULT_WHISPER_MODEL})"
-    )
-    transcribe_parser.add_argument(
-        "--device",
-        default=DEFAULT_DEVICE,
-        choices=["cpu", "cuda", "auto"],
-        help=f"Processing device (default: {DEFAULT_DEVICE} - uses MLX on Apple Silicon if available)"
     )
 
     args = parser.parse_args()
@@ -365,17 +276,10 @@ Examples:
     # Setup logging
     setup_logging(args.verbose)
 
-    # If no command specified, default to process mode
+    # If no command specified, show help
     if args.command is None:
-        if args.input is None:
-            parser.error("the following arguments are required: input")
-
-        # Set defaults for missing arguments
-        if args.out is None:
-            args.out = Path(DEFAULT_OUTPUT_DIR)
-
-        args.command = "process"
-        handle_process(args)
+        parser.print_help()
+        sys.exit(1)
     # Dispatch to subcommand handlers
     elif args.command == "process":
         handle_process(args)
