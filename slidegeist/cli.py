@@ -70,9 +70,12 @@ def handle_process(args: argparse.Namespace) -> None:
         print("✓ Processing complete!")
         print("=" * 60)
         if 'slides' in result:
-            print(f"  Slides:     {len(result['slides'])} images in {args.out}/")  # type: ignore
-        if 'transcript' in result:
-            print(f"  Transcript: {result['transcript']}")
+            print(f"  Slides:     {len(result['slides'])} images")  # type: ignore
+        if 'srt' in result:
+            print(f"  SRT:        {result['srt']}")
+        if 'manifest' in result:
+            print(f"  Manifest:   {result['manifest']}")
+        print(f"  Output dir: {result['output_dir']}")
         print("=" * 60)
 
     except FileNotFoundError as e:
@@ -90,7 +93,7 @@ def handle_slides(args: argparse.Namespace) -> None:
     try:
         check_prerequisites()
 
-        slide_paths = process_slides_only(
+        result = process_slides_only(
             video_path=args.input,
             output_dir=args.out,
             scene_threshold=args.scene_threshold,
@@ -99,7 +102,9 @@ def handle_slides(args: argparse.Namespace) -> None:
             image_format=args.format
         )
 
-        print(f"\n✓ Extracted {len(slide_paths)} slides to {args.out}/")
+        print(f"\n✓ Extracted {len(result['slides'])} slides")  # type: ignore
+        print(f"  Manifest:   {result['manifest']}")
+        print(f"  Output dir: {result['output_dir']}")
 
     except Exception as e:
         logger.error(f"Slide extraction failed: {e}")
@@ -113,14 +118,18 @@ def handle_transcribe(args: argparse.Namespace) -> None:
     try:
         check_prerequisites()
 
-        transcript_path = process_transcript_only(
+        result = process_transcript_only(
             video_path=args.input,
             output_dir=args.out,
             model=args.model,
             device=args.device
         )
 
-        print(f"\n✓ Transcript saved to {transcript_path}")
+        print(f"\n✓ Transcription complete")
+        if 'srt' in result:
+            print(f"  SRT:        {result['srt']}")
+        print(f"  Manifest:   {result['manifest']}")
+        print(f"  Output dir: {result['output_dir']}")
 
     except Exception as e:
         logger.error(f"Transcription failed: {e}")
