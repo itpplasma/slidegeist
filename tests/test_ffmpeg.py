@@ -2,7 +2,7 @@
 
 import pytest
 
-from slidegeist.ffmpeg import check_ffmpeg_available, format_timestamp_filename
+from slidegeist.ffmpeg import check_ffmpeg_available
 from slidegeist.slides import format_timestamp_filename
 
 
