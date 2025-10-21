@@ -1,7 +1,7 @@
 """Constants used across the slidegeist package."""
 
 # Scene detection
-DEFAULT_SCENE_THRESHOLD = 0.3  # Works well for most slides including handwritten content
+DEFAULT_SCENE_THRESHOLD = 0.2  # Lower threshold to catch subtle handwritten slide transitions
 
 # Whisper transcription
 DEFAULT_WHISPER_MODEL = "large-v3"  # Best accuracy

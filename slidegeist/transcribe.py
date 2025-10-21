@@ -1,6 +1,7 @@
 """Audio transcription using faster-whisper."""
 
 import logging
+import os
 import platform
 from pathlib import Path
 from typing import TypedDict
@@ -106,6 +107,9 @@ def transcribe_video(
     # Use MLX-optimized transcription if available
     if use_mlx:
         try:
+            # Suppress MLX debug output
+            os.environ["MLX_JIT_DEBUG"] = "0"
+
             import mlx_whisper  # type: ignore[import-untyped]
 
             # Map faster-whisper model names to MLX model names

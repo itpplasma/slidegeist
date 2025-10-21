@@ -29,8 +29,8 @@ def extract_slides(
 ) -> list[Path]:
     """Extract slides from video at scene change timestamps.
 
-    Each slide is extracted just before the scene change (the final frame
-    of each segment). Filenames include start and end timestamps.
+    Each slide is extracted shortly after the scene change (after transition
+    frames settle). Filenames include start and end timestamps.
 
     Args:
         video_path: Path to the video file.
@@ -73,12 +73,13 @@ def extract_slides(
             continue
 
         # Extract frame at the end of the segment (just before next scene)
-        # Use a small offset before the end to ensure we get the final slide content
+        # This ensures we capture the complete slide content (important for handwritten slides)
+        # Use a small offset before the end to avoid transition frames
         # For very short segments, use the midpoint instead
-        if segment_duration < 0.2:
+        if segment_duration < 0.5:
             extract_time = start_time + segment_duration / 2
         else:
-            extract_time = max(start_time, end_time - 0.1)
+            extract_time = end_time - 0.2  # 200ms before scene change
 
         # Convert to milliseconds for filename
         start_ms = int(start_time * 1000)

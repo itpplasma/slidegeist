@@ -1,9 +1,8 @@
 """Tests for SRT export functionality."""
 
-import pytest
 from pathlib import Path
 
-from slidegeist.export import format_timestamp_srt, export_srt
+from slidegeist.export import export_srt, format_timestamp_srt
 from slidegeist.transcribe import Segment
 
 
