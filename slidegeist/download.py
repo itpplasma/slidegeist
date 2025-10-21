@@ -1,6 +1,7 @@
 """Video download from URLs using yt-dlp."""
 
 import logging
+import re
 import tempfile
 from pathlib import Path
 from typing import Literal
@@ -10,6 +11,32 @@ import yt_dlp
 logger = logging.getLogger(__name__)
 
 BrowserType = Literal["firefox", "safari", "chrome", "chromium", "edge", "opera", "brave"]
+
+
+def translate_url(url: str) -> str:
+    """Translate URLs to formats compatible with yt-dlp extractors.
+
+    Args:
+        url: Original URL.
+
+    Returns:
+        Translated URL if translation needed, otherwise original URL.
+
+    Examples:
+        TU Graz portal URL -> paella URL:
+        https://tube.tugraz.at/portal/watch/<UUID>
+        -> https://tube.tugraz.at/paella/ui/watch.html?id=<UUID>
+    """
+    # TU Graz Tube: portal format -> paella format
+    tugraz_portal_pattern = r"https?://tube\.tugraz\.at/portal/watch/([0-9a-fA-F-]+)"
+    match = re.match(tugraz_portal_pattern, url)
+    if match:
+        video_id = match.group(1)
+        translated = f"https://tube.tugraz.at/paella/ui/watch.html?id={video_id}"
+        logger.info(f"Translated TU Graz URL: {url} -> {translated}")
+        return translated
+
+    return url
 
 
 def download_video(
@@ -60,6 +87,9 @@ def download_video(
         "extract_flat": False,
         "merge_output_format": "mp4",
     }
+
+    # Translate URL to yt-dlp-compatible format if needed
+    url = translate_url(url)
 
     # Add browser cookies if specified
     if cookies_from_browser:
