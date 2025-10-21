@@ -3,6 +3,12 @@
 import logging
 from pathlib import Path
 
+from slidegeist.constants import (
+    DEFAULT_DEVICE,
+    DEFAULT_IMAGE_FORMAT,
+    DEFAULT_SCENE_THRESHOLD,
+    DEFAULT_WHISPER_MODEL,
+)
 from slidegeist.export import export_srt
 from slidegeist.ffmpeg import detect_scenes
 from slidegeist.slides import extract_slides
@@ -14,10 +20,10 @@ logger = logging.getLogger(__name__)
 def process_video(
     video_path: Path,
     output_dir: Path,
-    scene_threshold: float = 0.4,
-    model: str = "large-v3",
-    device: str = "auto",
-    image_format: str = "jpg",
+    scene_threshold: float = DEFAULT_SCENE_THRESHOLD,
+    model: str = DEFAULT_WHISPER_MODEL,
+    device: str = DEFAULT_DEVICE,
+    image_format: str = DEFAULT_IMAGE_FORMAT,
     skip_slides: bool = False,
     skip_transcription: bool = False
 ) -> dict[str, Path | list[Path]]:
@@ -117,8 +123,8 @@ def process_video(
 def process_slides_only(
     video_path: Path,
     output_dir: Path,
-    scene_threshold: float = 0.4,
-    image_format: str = "jpg"
+    scene_threshold: float = DEFAULT_SCENE_THRESHOLD,
+    image_format: str = DEFAULT_IMAGE_FORMAT
 ) -> list[Path]:
     """Extract only slides from video (no transcription).
 
@@ -148,8 +154,8 @@ def process_slides_only(
 def process_transcript_only(
     video_path: Path,
     output_dir: Path,
-    model: str = "large-v3",
-    device: str = "auto"
+    model: str = DEFAULT_WHISPER_MODEL,
+    device: str = DEFAULT_DEVICE
 ) -> Path:
     """Extract only transcript from video (no slides).
 

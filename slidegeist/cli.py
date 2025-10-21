@@ -6,6 +6,13 @@ import sys
 from pathlib import Path
 
 from slidegeist import __version__
+from slidegeist.constants import (
+    DEFAULT_DEVICE,
+    DEFAULT_IMAGE_FORMAT,
+    DEFAULT_OUTPUT_DIR,
+    DEFAULT_SCENE_THRESHOLD,
+    DEFAULT_WHISPER_MODEL,
+)
 from slidegeist.ffmpeg import check_ffmpeg_available
 from slidegeist.pipeline import process_slides_only, process_transcript_only, process_video
 
@@ -168,33 +175,33 @@ Examples:
     process_parser.add_argument(
         "--out",
         type=Path,
-        default=Path("output"),
-        help="Output directory (default: output/)"
+        default=Path(DEFAULT_OUTPUT_DIR),
+        help=f"Output directory (default: {DEFAULT_OUTPUT_DIR}/)"
     )
     process_parser.add_argument(
         "--scene-threshold",
         type=float,
-        default=0.4,
+        default=DEFAULT_SCENE_THRESHOLD,
         metavar="NUM",
-        help="Scene detection threshold 0.0-1.0 (default: 0.4)"
+        help=f"Scene detection threshold 0.0-1.0 (default: {DEFAULT_SCENE_THRESHOLD})"
     )
     process_parser.add_argument(
         "--model",
-        default="large-v3",
+        default=DEFAULT_WHISPER_MODEL,
         choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"],
-        help="Whisper model size (default: large-v3)"
+        help=f"Whisper model size (default: {DEFAULT_WHISPER_MODEL})"
     )
     process_parser.add_argument(
         "--device",
-        default="auto",
+        default=DEFAULT_DEVICE,
         choices=["cpu", "cuda", "auto"],
-        help="Processing device (default: auto - uses MLX on Apple Silicon if available)"
+        help=f"Processing device (default: {DEFAULT_DEVICE} - uses MLX on Apple Silicon if available)"
     )
     process_parser.add_argument(
         "--format",
-        default="jpg",
+        default=DEFAULT_IMAGE_FORMAT,
         choices=["jpg", "png"],
-        help="Slide image format (default: jpg)"
+        help=f"Slide image format (default: {DEFAULT_IMAGE_FORMAT})"
     )
 
     # Slides command
@@ -210,21 +217,21 @@ Examples:
     slides_parser.add_argument(
         "--out",
         type=Path,
-        default=Path("output"),
-        help="Output directory (default: output/)"
+        default=Path(DEFAULT_OUTPUT_DIR),
+        help=f"Output directory (default: {DEFAULT_OUTPUT_DIR}/)"
     )
     slides_parser.add_argument(
         "--scene-threshold",
         type=float,
-        default=0.4,
+        default=DEFAULT_SCENE_THRESHOLD,
         metavar="NUM",
-        help="Scene detection threshold 0.0-1.0 (default: 0.4)"
+        help=f"Scene detection threshold 0.0-1.0 (default: {DEFAULT_SCENE_THRESHOLD})"
     )
     slides_parser.add_argument(
         "--format",
-        default="jpg",
+        default=DEFAULT_IMAGE_FORMAT,
         choices=["jpg", "png"],
-        help="Slide image format (default: jpg)"
+        help=f"Slide image format (default: {DEFAULT_IMAGE_FORMAT})"
     )
 
     # Transcribe command
@@ -240,20 +247,20 @@ Examples:
     transcribe_parser.add_argument(
         "--out",
         type=Path,
-        default=Path("output"),
-        help="Output directory (default: output/)"
+        default=Path(DEFAULT_OUTPUT_DIR),
+        help=f"Output directory (default: {DEFAULT_OUTPUT_DIR}/)"
     )
     transcribe_parser.add_argument(
         "--model",
-        default="large-v3",
+        default=DEFAULT_WHISPER_MODEL,
         choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"],
-        help="Whisper model size (default: large-v3)"
+        help=f"Whisper model size (default: {DEFAULT_WHISPER_MODEL})"
     )
     transcribe_parser.add_argument(
         "--device",
-        default="auto",
+        default=DEFAULT_DEVICE,
         choices=["cpu", "cuda", "auto"],
-        help="Processing device (default: auto - uses MLX on Apple Silicon if available)"
+        help=f"Processing device (default: {DEFAULT_DEVICE} - uses MLX on Apple Silicon if available)"
     )
 
     args = parser.parse_args()

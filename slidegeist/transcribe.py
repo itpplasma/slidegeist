@@ -5,6 +5,14 @@ import platform
 from pathlib import Path
 from typing import TypedDict
 
+from slidegeist.constants import (
+    COMPRESSION_RATIO_THRESHOLD,
+    DEFAULT_DEVICE,
+    DEFAULT_WHISPER_MODEL,
+    LOG_PROB_THRESHOLD,
+    NO_SPEECH_THRESHOLD,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,8 +59,8 @@ class TranscriptResult(TypedDict):
 
 def transcribe_video(
     video_path: Path,
-    model_size: str = "large-v3",
-    device: str = "cpu",
+    model_size: str = DEFAULT_WHISPER_MODEL,
+    device: str = DEFAULT_DEVICE,
     compute_type: str = "int8"
 ) -> TranscriptResult:
     """Transcribe video audio using faster-whisper.
@@ -99,10 +107,23 @@ def transcribe_video(
     if use_mlx:
         try:
             import mlx_whisper  # type: ignore[import-untyped]
-            logger.info(f"Loading MLX Whisper model: {model_size}")
+
+            # Map faster-whisper model names to MLX model names
+            mlx_model_map = {
+                "large-v3": "mlx-community/whisper-large-v3-mlx",
+                "large-v2": "mlx-community/whisper-large-v2-mlx",
+                "large": "mlx-community/whisper-large-v2-mlx",
+                "medium": "mlx-community/whisper-medium-mlx",
+                "small": "mlx-community/whisper-small-mlx",
+                "base": "mlx-community/whisper-base-mlx",
+                "tiny": "mlx-community/whisper-tiny-mlx",
+            }
+            mlx_model = mlx_model_map.get(model_size, f"mlx-community/whisper-{model_size}-mlx")
+
+            logger.info(f"Loading MLX Whisper model: {mlx_model}")
             result = mlx_whisper.transcribe(
                 str(video_path),
-                path_or_hf_repo=model_size,
+                path_or_hf_repo=mlx_model,
                 word_timestamps=True,
             )
             # Convert MLX result to our format
@@ -142,6 +163,9 @@ def transcribe_video(
         str(video_path),
         word_timestamps=True,
         vad_filter=True,  # Voice activity detection for better accuracy
+        compression_ratio_threshold=COMPRESSION_RATIO_THRESHOLD,
+        log_prob_threshold=LOG_PROB_THRESHOLD,
+        no_speech_threshold=NO_SPEECH_THRESHOLD,
     )
 
     # Convert iterator to list and extract data

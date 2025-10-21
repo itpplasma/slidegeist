@@ -6,6 +6,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from slidegeist.constants import DEFAULT_SCENE_THRESHOLD
+
 logger = logging.getLogger(__name__)
 
 
@@ -53,13 +55,14 @@ def get_video_duration(video_path: Path) -> float:
         raise FFmpegError(f"Failed to get video duration: {e}")
 
 
-def detect_scenes(video_path: Path, threshold: float = 0.4) -> list[float]:
+def detect_scenes(video_path: Path, threshold: float = DEFAULT_SCENE_THRESHOLD) -> list[float]:
     """Detect scene changes in a video using FFmpeg's scene filter.
 
     Args:
         video_path: Path to the video file.
         threshold: Scene detection threshold (0.0-1.0). Higher values mean
-                  fewer scene changes detected. Default 0.4 works well for slides.
+                  fewer scene changes detected. Default works well for most slides
+                  including handwritten content.
 
     Returns:
         List of timestamps (in seconds) where scene changes occur, sorted.
