@@ -43,8 +43,9 @@ def export_slides_json(
             seg_start = segment['start']
             seg_end = segment['end']
 
-            # Check if segment overlaps with slide time range
-            if seg_start < t_end and seg_end > t_start:
+            # Include segment if its start time is within this slide's time range
+            # This avoids duplicates while ensuring complete coverage
+            if seg_start >= t_start and seg_start < t_end:
                 text = segment['text'].strip()
                 if text:
                     transcript_parts.append(text)
