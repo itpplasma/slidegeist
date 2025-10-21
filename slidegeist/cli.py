@@ -9,8 +9,10 @@ from slidegeist import __version__
 from slidegeist.constants import (
     DEFAULT_DEVICE,
     DEFAULT_IMAGE_FORMAT,
+    DEFAULT_MIN_SCENE_LEN,
     DEFAULT_OUTPUT_DIR,
     DEFAULT_SCENE_THRESHOLD,
+    DEFAULT_START_OFFSET,
     DEFAULT_WHISPER_MODEL,
 )
 from slidegeist.ffmpeg import check_ffmpeg_available
@@ -57,6 +59,8 @@ def handle_process(args: argparse.Namespace) -> None:
             video_path=args.input,
             output_dir=args.out,
             scene_threshold=args.scene_threshold,
+            min_scene_len=args.min_scene_len,
+            start_offset=args.start_offset,
             model=args.model,
             device=args.device,
             image_format=args.format
@@ -90,6 +94,8 @@ def handle_slides(args: argparse.Namespace) -> None:
             video_path=args.input,
             output_dir=args.out,
             scene_threshold=args.scene_threshold,
+            min_scene_len=args.min_scene_len,
+            start_offset=args.start_offset,
             image_format=args.format
         )
 
@@ -183,7 +189,21 @@ Examples:
         type=float,
         default=DEFAULT_SCENE_THRESHOLD,
         metavar="NUM",
-        help=f"Scene detection threshold, lower = more sensitive (default: {DEFAULT_SCENE_THRESHOLD})"
+        help=f"Scene detection threshold 0-100, lower=more sensitive (default: {DEFAULT_SCENE_THRESHOLD})"
+    )
+    process_parser.add_argument(
+        "--min-scene-len",
+        type=float,
+        default=DEFAULT_MIN_SCENE_LEN,
+        metavar="SEC",
+        help=f"Minimum scene length in seconds (default: {DEFAULT_MIN_SCENE_LEN})"
+    )
+    process_parser.add_argument(
+        "--start-offset",
+        type=float,
+        default=DEFAULT_START_OFFSET,
+        metavar="SEC",
+        help=f"Skip first N seconds to avoid mouse movement (default: {DEFAULT_START_OFFSET})"
     )
     process_parser.add_argument(
         "--model",
@@ -225,7 +245,21 @@ Examples:
         type=float,
         default=DEFAULT_SCENE_THRESHOLD,
         metavar="NUM",
-        help=f"Scene detection threshold, lower = more sensitive (default: {DEFAULT_SCENE_THRESHOLD})"
+        help=f"Scene detection threshold 0-100, lower=more sensitive (default: {DEFAULT_SCENE_THRESHOLD})"
+    )
+    slides_parser.add_argument(
+        "--min-scene-len",
+        type=float,
+        default=DEFAULT_MIN_SCENE_LEN,
+        metavar="SEC",
+        help=f"Minimum scene length in seconds (default: {DEFAULT_MIN_SCENE_LEN})"
+    )
+    slides_parser.add_argument(
+        "--start-offset",
+        type=float,
+        default=DEFAULT_START_OFFSET,
+        metavar="SEC",
+        help=f"Skip first N seconds to avoid mouse movement (default: {DEFAULT_START_OFFSET})"
     )
     slides_parser.add_argument(
         "--format",

@@ -6,7 +6,9 @@ from pathlib import Path
 from slidegeist.constants import (
     DEFAULT_DEVICE,
     DEFAULT_IMAGE_FORMAT,
+    DEFAULT_MIN_SCENE_LEN,
     DEFAULT_SCENE_THRESHOLD,
+    DEFAULT_START_OFFSET,
     DEFAULT_WHISPER_MODEL,
 )
 from slidegeist.export import export_srt
@@ -21,6 +23,8 @@ def process_video(
     video_path: Path,
     output_dir: Path,
     scene_threshold: float = DEFAULT_SCENE_THRESHOLD,
+    min_scene_len: float = DEFAULT_MIN_SCENE_LEN,
+    start_offset: float = DEFAULT_START_OFFSET,
     model: str = DEFAULT_WHISPER_MODEL,
     device: str = DEFAULT_DEVICE,
     image_format: str = DEFAULT_IMAGE_FORMAT,
@@ -32,7 +36,9 @@ def process_video(
     Args:
         video_path: Path to the input video file.
         output_dir: Directory where outputs will be saved.
-        scene_threshold: Scene detection sensitivity (0.0-1.0).
+        scene_threshold: Scene detection threshold (0-100, lower = more sensitive).
+        min_scene_len: Minimum scene length in seconds.
+        start_offset: Skip first N seconds to avoid setup noise.
         model: Whisper model size (tiny, base, small, medium, large).
         device: Device for transcription (cpu or cuda).
         image_format: Output image format (jpg or png).
@@ -68,7 +74,12 @@ def process_video(
         logger.info("STEP 1: Scene Detection")
         logger.info("=" * 60)
 
-        scene_timestamps = detect_scenes(video_path, threshold=scene_threshold)
+        scene_timestamps = detect_scenes(
+            video_path,
+            threshold=scene_threshold,
+            min_scene_len=min_scene_len,
+            start_offset=start_offset
+        )
 
         if not scene_timestamps:
             logger.warning("No scene changes detected. Extracting single slide.")
@@ -124,6 +135,8 @@ def process_slides_only(
     video_path: Path,
     output_dir: Path,
     scene_threshold: float = DEFAULT_SCENE_THRESHOLD,
+    min_scene_len: float = DEFAULT_MIN_SCENE_LEN,
+    start_offset: float = DEFAULT_START_OFFSET,
     image_format: str = DEFAULT_IMAGE_FORMAT
 ) -> list[Path]:
     """Extract only slides from video (no transcription).
@@ -131,7 +144,9 @@ def process_slides_only(
     Args:
         video_path: Path to the input video file.
         output_dir: Directory where slide images will be saved.
-        scene_threshold: Scene detection sensitivity (0.0-1.0).
+        scene_threshold: Scene detection threshold (0-100, lower = more sensitive).
+        min_scene_len: Minimum scene length in seconds.
+        start_offset: Skip first N seconds to avoid setup noise.
         image_format: Output image format (jpg or png).
 
     Returns:
@@ -142,6 +157,8 @@ def process_slides_only(
         video_path,
         output_dir,
         scene_threshold=scene_threshold,
+        min_scene_len=min_scene_len,
+        start_offset=start_offset,
         image_format=image_format,
         skip_transcription=True
     )

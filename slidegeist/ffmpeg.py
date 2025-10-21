@@ -5,7 +5,11 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from slidegeist.constants import DEFAULT_SCENE_THRESHOLD
+from slidegeist.constants import (
+    DEFAULT_MIN_SCENE_LEN,
+    DEFAULT_SCENE_THRESHOLD,
+    DEFAULT_START_OFFSET,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -54,16 +58,29 @@ def get_video_duration(video_path: Path) -> float:
         raise FFmpegError(f"Failed to get video duration: {e}")
 
 
-def detect_scenes(video_path: Path, threshold: float = DEFAULT_SCENE_THRESHOLD) -> list[float]:
-    """Detect scene changes in a video using PySceneDetect.
+def detect_scenes(
+    video_path: Path,
+    threshold: float = DEFAULT_SCENE_THRESHOLD,
+    min_scene_len: float = DEFAULT_MIN_SCENE_LEN,
+    start_offset: float = DEFAULT_START_OFFSET
+) -> list[float]:
+    """Detect slide changes in a video using histogram comparison.
+
+    Uses OpenCV histogram correlation to detect page flips while ignoring
+    gradual handwriting changes. Optimized for presentation videos.
+
+    Based on research: "Automatic detection of slide transitions in lecture videos"
 
     Args:
         video_path: Path to the video file.
-        threshold: Scene detection threshold (lower = more sensitive).
-                  Default 27.0 works well for most content including handwritten slides.
+        threshold: Scene detection threshold (0-100 scale).
+                  Lower = more sensitive. Default 25 -> 0.75 correlation.
+                  Typical range: 20-30 for presentations.
+        min_scene_len: Minimum scene length in seconds (filters rapid clicks).
+        start_offset: Skip first N seconds to avoid mouse movement during setup.
 
     Returns:
-        List of timestamps (in seconds) where scene changes occur, sorted.
+        List of timestamps (in seconds) where slide changes occur, sorted.
 
     Raises:
         FFmpegError: If video file not found or processing fails.
@@ -71,34 +88,15 @@ def detect_scenes(video_path: Path, threshold: float = DEFAULT_SCENE_THRESHOLD) 
     if not video_path.exists():
         raise FFmpegError(f"Video file not found: {video_path}")
 
-    try:
-        from scenedetect import ContentDetector, detect  # type: ignore[import-untyped]
-    except ImportError:
-        raise FFmpegError(
-            "PySceneDetect not installed. Install with: pip install scenedetect[opencv]"
-        )
+    # Use TransNetV2 neural network (state-of-the-art shot boundary detection)
+    # Paper: https://arxiv.org/abs/2008.04838
+    from slidegeist.transnet_detector import detect_slides_transnet
 
-    logger.info(f"Detecting scenes with threshold {threshold}")
-
-    try:
-        # Use ContentDetector for content-aware scene detection
-        # This is better for gradual changes like handwritten slides
-        scene_list = detect(str(video_path), ContentDetector(threshold=threshold))
-
-        # Extract start times (in seconds) from scene list
-        # scene_list contains tuples of (start_time, end_time)
-        timestamps = [scene[0].get_seconds() for scene in scene_list]
-
-        # Skip the first timestamp (0.0) as it's the start of the video
-        if timestamps and timestamps[0] == 0.0:
-            timestamps = timestamps[1:]
-
-        timestamps.sort()
-        logger.info(f"Found {len(timestamps)} scene changes")
-
-        return timestamps
-    except Exception as e:
-        raise FFmpegError(f"Scene detection failed: {e}")
+    return detect_slides_transnet(
+        video_path,
+        start_offset=start_offset,
+        min_scene_len=min_scene_len
+    )
 
 
 def extract_frame(
@@ -135,6 +133,7 @@ def extract_frame(
         "-i", str(video_path),
         "-frames:v", "1",  # Extract one frame
         *quality_args,
+        "-strict", "unofficial",  # Allow non-standard YUV colorspace
         "-y",  # Overwrite output file
         str(output_path)
     ]
