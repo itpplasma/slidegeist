@@ -139,7 +139,10 @@ def process_slides_only(
         image_format=image_format,
         skip_transcription=True
     )
-    return result.get('slides', [])  # type: ignore
+    slides = result.get('slides', [])
+    if not isinstance(slides, list):
+        return []
+    return slides
 
 
 def process_transcript_only(
@@ -167,4 +170,7 @@ def process_transcript_only(
         device=device,
         skip_slides=True
     )
-    return result['transcript']  # type: ignore
+    transcript = result.get('transcript')
+    if not isinstance(transcript, Path):
+        raise RuntimeError("Transcript path not found in results")
+    return transcript

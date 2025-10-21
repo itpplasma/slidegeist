@@ -51,7 +51,7 @@ def transcribe_video(
         Exception: If transcription fails.
     """
     try:
-        from faster_whisper import WhisperModel
+        from faster_whisper import WhisperModel  # type: ignore[import-untyped]
     except ImportError:
         raise ImportError(
             "faster-whisper not installed. Install with: pip install faster-whisper"

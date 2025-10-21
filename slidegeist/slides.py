@@ -65,10 +65,20 @@ def extract_slides(
     for i in range(len(boundaries) - 1):
         start_time = boundaries[i]
         end_time = boundaries[i + 1]
+        segment_duration = end_time - start_time
+
+        # Validate segment duration
+        if segment_duration < 0.01:  # 10ms minimum
+            logger.warning(f"Skipping very short segment at {start_time:.2f}s (duration: {segment_duration*1000:.1f}ms)")
+            continue
 
         # Extract frame at the end of the segment (just before next scene)
-        # Use a small offset (0.1s) before the end to ensure we get the final slide content
-        extract_time = max(start_time, end_time - 0.1)
+        # Use a small offset before the end to ensure we get the final slide content
+        # For very short segments, use the midpoint instead
+        if segment_duration < 0.2:
+            extract_time = start_time + segment_duration / 2
+        else:
+            extract_time = max(start_time, end_time - 0.1)
 
         # Convert to milliseconds for filename
         start_ms = int(start_time * 1000)

@@ -5,7 +5,6 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -67,12 +66,16 @@ def detect_scenes(video_path: Path, threshold: float = 0.4) -> list[float]:
 
     Raises:
         FFmpegError: If FFmpeg is not available or processing fails.
+        ValueError: If threshold is not in valid range.
     """
     if not check_ffmpeg_available():
         raise FFmpegError("FFmpeg not found. Please install FFmpeg.")
 
     if not video_path.exists():
         raise FFmpegError(f"Video file not found: {video_path}")
+
+    if not 0.0 <= threshold <= 1.0:
+        raise ValueError(f"Scene threshold must be between 0.0 and 1.0, got {threshold}")
 
     logger.info(f"Detecting scenes with threshold {threshold}")
 
@@ -87,8 +90,10 @@ def detect_scenes(video_path: Path, threshold: float = 0.4) -> list[float]:
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)
         # Scene detection info is in stderr
+        if result.returncode != 0:
+            raise FFmpegError(f"FFmpeg scene detection failed: {result.stderr}")
         output = result.stderr
-    except Exception as e:
+    except subprocess.SubprocessError as e:
         raise FFmpegError(f"Failed to run FFmpeg: {e}")
 
     # Parse timestamps from showinfo output
