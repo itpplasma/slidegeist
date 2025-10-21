@@ -8,24 +8,23 @@ from slidegeist.ffmpeg import extract_frame, get_video_duration
 logger = logging.getLogger(__name__)
 
 
-def format_timestamp_srt(seconds: float) -> str:
-    """Format seconds to SRT timestamp format: HH:MM:SS,mmm
+def format_timestamp_hhmmss(seconds: float) -> str:
+    """Format seconds to HH:MM:SS format (without milliseconds).
 
     Args:
-        seconds: Time in seconds (can include fractional seconds).
+        seconds: Time in seconds.
 
     Returns:
-        Formatted timestamp string like '00:02:05,300'
+        Formatted timestamp string like '00:02:05' or '01:23:45'
     """
     hours = int(seconds // 3600)
     minutes = int((seconds % 3600) // 60)
     secs = int(seconds % 60)
-    millis = int((seconds % 1) * 1000)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
 def format_slide_filename(index: int, total_slides: int, t_start: float, t_end: float) -> str:
-    """Format zero-padded slide filename with SRT timestamps.
+    """Format zero-padded slide filename with HH:MM:SS timestamps.
 
     Args:
         index: Slide index (0-based).
@@ -34,12 +33,12 @@ def format_slide_filename(index: int, total_slides: int, t_start: float, t_end: 
         t_end: End time in seconds.
 
     Returns:
-        Formatted string like 'slide_000_00:00:00,000-00:00:10,500'
+        Formatted string like 'slide_000_00:00:00-00:00:10' or 'slide_042_01:23:45-02:15:30'
     """
     # Determine padding based on total slides
     padding = max(3, len(str(total_slides - 1)))
-    start_ts = format_timestamp_srt(t_start)
-    end_ts = format_timestamp_srt(t_end)
+    start_ts = format_timestamp_hhmmss(t_start)
+    end_ts = format_timestamp_hhmmss(t_end)
     return f"slide_{index:0{padding}d}_{start_ts}-{end_ts}"
 
 

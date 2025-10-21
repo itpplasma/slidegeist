@@ -13,7 +13,7 @@ from slidegeist.constants import (
     DEFAULT_WHISPER_MODEL,
 )
 from slidegeist.export import export_srt
-from slidegeist.ffmpeg import detect_scenes, get_video_duration
+from slidegeist.ffmpeg import detect_scenes
 from slidegeist.slides import extract_slides
 from slidegeist.transcribe import transcribe_video
 
@@ -74,9 +74,6 @@ def process_video(
     results: dict[str, Path | list[Path]] = {
         'output_dir': output_dir
     }
-
-    # Get video duration
-    duration = get_video_duration(video_path)
 
     # Step 1: Scene detection (needed for slides)
     slide_metadata: list[tuple[int, float, float, Path]] = []
