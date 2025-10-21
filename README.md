@@ -84,9 +84,9 @@ slidegeist process video.mp4 --device cuda
 # Use smaller/faster model
 slidegeist process video.mp4 --model base
 
-# Adjust scene detection sensitivity (0.0-1.0, default 0.3)
-# Lower values (e.g., 0.2) detect more subtle changes (good for handwritten slides)
-slidegeist process video.mp4 --scene-threshold 0.2
+# Adjust scene detection sensitivity (0.0-1.0, default 0.10)
+# Lower values detect more subtle changes, higher values only major transitions
+slidegeist process video.mp4 --scene-threshold 0.15
 ```
 
 ### Individual Operations
@@ -106,7 +106,7 @@ slidegeist process <video> [options]
 
 Options:
   --out DIR              Output directory (default: output/)
-  --scene-threshold NUM  Scene detection sensitivity 0.0-1.0 (default: 0.3)
+  --scene-threshold NUM  Scene detection sensitivity 0.0-1.0 (default: 0.10)
   --model NAME          Whisper model: tiny, base, small, medium, large, large-v2, large-v3
                         (default: large-v3)
   --device NAME         Device: cpu, cuda, or auto (default: auto)

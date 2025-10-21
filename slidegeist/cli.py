@@ -122,7 +122,7 @@ def handle_transcribe(args: argparse.Namespace) -> None:
             device=args.device
         )
 
-        print(f"\n✓ Transcription complete")
+        print("\n✓ Transcription complete")
         if 'transcript' in result:
             print(f"  Transcript:  {result['transcript']}")
         print(f"  Output dir:  {result['output_dir']}")
@@ -181,7 +181,7 @@ Examples:
     parser.add_argument(
         "--out",
         type=Path,
-        help=f"Output directory (default: video filename)"
+        help="Output directory (default: video filename)"
     )
 
     parser.add_argument(

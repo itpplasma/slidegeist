@@ -130,7 +130,7 @@ def process_video(
     if not skip_slides:
         logger.info(f"✓ Extracted {len(slide_metadata)} slides")
     if not skip_transcription:
-        logger.info(f"✓ Transcribed and saved SRT")
+        logger.info("✓ Transcribed and saved SRT")
     logger.info(f"✓ All outputs in: {output_dir}")
 
     return results
