@@ -63,7 +63,7 @@ def handle_process(args: argparse.Namespace) -> None:
             start_offset=args.start_offset,
             model=args.model,
             device=args.device,
-            image_format=args.format
+            image_format=getattr(args, 'format', DEFAULT_IMAGE_FORMAT)
         )
 
         print("\n" + "=" * 60)
@@ -142,19 +142,19 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Process full video (uses large-v3 model with auto-detection)
-  slidegeist process lecture.mp4
-
-  # Use GPU explicitly
-  slidegeist process lecture.mp4 --device cuda
+  # Process video (default: slides + transcript with large-v3 model)
+  slidegeist lecture.mp4
 
   # Use smaller/faster model
-  slidegeist process lecture.mp4 --model base
+  slidegeist lecture.mp4 --model tiny
 
-  # Extract only slides
+  # Use GPU explicitly
+  slidegeist lecture.mp4 --device cuda
+
+  # Extract only slides (no transcription)
   slidegeist slides lecture.mp4
 
-  # Extract only transcript
+  # Extract only transcript (no slides)
   slidegeist transcribe lecture.mp4
         """
     )
@@ -166,17 +166,75 @@ Examples:
     )
 
     parser.add_argument(
+        "input",
+        type=Path,
+        nargs="?",
+        help="Input video file"
+    )
+
+    parser.add_argument(
         "-v", "--verbose",
         action="store_true",
         help="Enable verbose logging"
     )
 
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    parser.add_argument(
+        "--out",
+        type=Path,
+        help=f"Output directory (default: video filename)"
+    )
 
-    # Process command (full pipeline)
+    parser.add_argument(
+        "--model",
+        default=DEFAULT_WHISPER_MODEL,
+        choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"],
+        help=f"Whisper model size (default: {DEFAULT_WHISPER_MODEL})"
+    )
+
+    parser.add_argument(
+        "--device",
+        default=DEFAULT_DEVICE,
+        choices=["cpu", "cuda", "auto"],
+        help=f"Processing device (default: {DEFAULT_DEVICE})"
+    )
+
+    parser.add_argument(
+        "--scene-threshold",
+        type=float,
+        default=DEFAULT_SCENE_THRESHOLD,
+        metavar="NUM",
+        help=f"Scene detection threshold (default: {DEFAULT_SCENE_THRESHOLD})"
+    )
+
+    parser.add_argument(
+        "--min-scene-len",
+        type=float,
+        default=DEFAULT_MIN_SCENE_LEN,
+        metavar="SEC",
+        help=f"Minimum scene length in seconds (default: {DEFAULT_MIN_SCENE_LEN})"
+    )
+
+    parser.add_argument(
+        "--start-offset",
+        type=float,
+        default=DEFAULT_START_OFFSET,
+        metavar="SEC",
+        help=f"Skip first N seconds (default: {DEFAULT_START_OFFSET})"
+    )
+
+    parser.add_argument(
+        "--format",
+        default=DEFAULT_IMAGE_FORMAT,
+        choices=["jpg", "png"],
+        help=f"Slide image format (default: {DEFAULT_IMAGE_FORMAT})"
+    )
+
+    subparsers = parser.add_subparsers(dest="command", required=False)
+
+    # Process command (full pipeline) - this is the default
     process_parser = subparsers.add_parser(
         "process",
-        help="Process video (extract slides and transcript)"
+        help="Process video (extract slides and transcript) [default]"
     )
     process_parser.add_argument(
         "input",
@@ -307,8 +365,19 @@ Examples:
     # Setup logging
     setup_logging(args.verbose)
 
-    # Dispatch to appropriate handler
-    if args.command == "process":
+    # If no command specified, default to process mode
+    if args.command is None:
+        if args.input is None:
+            parser.error("the following arguments are required: input")
+
+        # Set defaults for missing arguments
+        if args.out is None:
+            args.out = Path(DEFAULT_OUTPUT_DIR)
+
+        args.command = "process"
+        handle_process(args)
+    # Dispatch to subcommand handlers
+    elif args.command == "process":
         handle_process(args)
     elif args.command == "slides":
         handle_slides(args)
