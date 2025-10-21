@@ -27,11 +27,11 @@ classifiers = [
 dependencies = [
     "faster-whisper>=1.0.0",
     "scenedetect[opencv]>=0.6.0",
+    "yt-dlp>=2024.0.0",
 ]
 
 [project.optional-dependencies]
 mlx = ["mlx-whisper>=0.1.0"]
-web = ["yt-dlp>=2024.0.0"]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
