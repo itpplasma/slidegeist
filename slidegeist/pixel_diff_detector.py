@@ -23,11 +23,10 @@ def detect_slides_pixel_diff(
     video_path: Path,
     start_offset: float = 3.0,
     min_scene_len: float = 0.5,
-    threshold: float = 0.04,
+    threshold: float = 0.03,
     sample_interval: float = 1.0,
     max_resolution: int = 360,
-    target_fps: float = 5.0,
-    confirmation_frames: int = 3
+    target_fps: float = 5.0
 ) -> list[float]:
     """Detect slide changes using Global Pixel Difference method.
 
@@ -38,16 +37,12 @@ def detect_slides_pixel_diff(
     For speed optimization, this function pre-downscales videos and reduces FPS.
     Since we're doing binary pixel difference, quality loss is minimal.
 
-    To avoid false positives from mouse pointer/scrolling, changes must be
-    sustained across multiple frames (confirmation). This filters transient
-    changes while keeping real slide transitions.
-
     Args:
         video_path: Path to the video file.
         start_offset: Skip first N seconds to avoid setup mouse movement.
         min_scene_len: Minimum scene length in seconds (filters rapid changes).
-        threshold: Detection threshold (0-1). Default 0.04 (tuned for handwritten slides).
-                  Lower = more sensitive. Typical range: 0.03-0.05.
+        threshold: Detection threshold (0-1). Default 0.03 from research.
+                  Lower = more sensitive. Typical range: 0.02-0.05.
         sample_interval: Time interval between frames to compare (seconds).
                         Default 1.0s balances accuracy and speed.
         max_resolution: Maximum resolution (height) for processing. Videos larger
@@ -55,9 +50,6 @@ def detect_slides_pixel_diff(
                        Default: 360p (good balance of speed/accuracy).
         target_fps: Target FPS for processing. Lower = faster.
                    Default: 5 FPS (good for slide detection).
-        confirmation_frames: Number of consecutive frames that must show change
-                           to confirm a real slide transition. Default: 3.
-                           Filters mouse pointer and scrolling artifacts.
 
     Returns:
         List of timestamps (seconds) where slide changes occur.
@@ -151,13 +143,8 @@ def detect_slides_pixel_diff(
 
     timestamps = []
     prev_frame_binary = None
-    baseline_frame_binary = None  # Stable reference before potential change
     last_change_frame = start_frame
     frame_num = start_frame
-
-    # For confirmation: track consecutive high-diff frames
-    consecutive_high_diff = 0
-    candidate_frame = None
 
     try:
         cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
@@ -178,55 +165,26 @@ def detect_slides_pixel_diff(
                 gray, 0, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU
             )
 
-            if prev_frame_binary is not None and baseline_frame_binary is not None:
-                # Compute pixel-level difference from previous frame
+            if prev_frame_binary is not None:
+                # Compute pixel-level difference
                 diff = np.abs(binary.astype(np.int16) - prev_frame_binary.astype(np.int16))
                 non_zero_count = np.count_nonzero(diff)
+
+                # Normalize by image size
                 normalized_diff = non_zero_count / image_size
 
-                # Also check difference from baseline (before change started)
-                baseline_diff = np.abs(binary.astype(np.int16) - baseline_frame_binary.astype(np.int16))
-                baseline_non_zero = np.count_nonzero(baseline_diff)
-                baseline_normalized = baseline_non_zero / image_size
-
                 # Check if difference exceeds threshold
-                if normalized_diff >= threshold and baseline_normalized >= threshold:
+                if normalized_diff >= threshold:
                     # Check minimum scene length constraint
                     if frame_num - last_change_frame >= min_frames_between:
-                        consecutive_high_diff += 1
-                        if candidate_frame is None:
-                            candidate_frame = frame_num
+                        timestamp = frame_num / working_fps
+                        timestamps.append(timestamp)
+                        last_change_frame = frame_num
 
-                        # Confirm after N consecutive high-diff frames
-                        if consecutive_high_diff >= confirmation_frames:
-                            timestamp = candidate_frame / working_fps
-                            timestamps.append(timestamp)
-                            last_change_frame = candidate_frame
-
-                            logger.debug(
-                                f"Slide change at {timestamp:.2f}s "
-                                f"(frame {candidate_frame}, confirmed over {consecutive_high_diff} frames)"
-                            )
-
-                            # Reset and update baseline
-                            baseline_frame_binary = binary.copy()
-                            consecutive_high_diff = 0
-                            candidate_frame = None
-                else:
-                    # Reset if change not sustained
-                    if consecutive_high_diff > 0 and consecutive_high_diff < confirmation_frames:
                         logger.debug(
-                            f"Rejected transient change at frame {candidate_frame} "
-                            f"(only {consecutive_high_diff} consecutive frames)"
+                            f"Slide change at {timestamp:.2f}s "
+                            f"(frame {frame_num}, diff={normalized_diff:.4f})"
                         )
-                    consecutive_high_diff = 0
-                    candidate_frame = None
-                    # Update baseline when stable
-                    baseline_frame_binary = binary.copy()
-
-            # Initialize baseline on first frame
-            if baseline_frame_binary is None:
-                baseline_frame_binary = binary.copy()
 
             prev_frame_binary = binary
             frame_num += 1
