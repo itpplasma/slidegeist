@@ -72,16 +72,16 @@ def extract_slides(
             logger.warning(f"Skipping very short segment at {start_time:.2f}s (duration: {segment_duration*1000:.1f}ms)")
             continue
 
-        # Extract frame at the very end of the segment (just before scene transition)
-        # This captures the fully written/complete slide content
-        # Use minimal offset to avoid catching the actual transition frame
-        if segment_duration < 0.2:
-            # Very short segments: use midpoint
+        # Extract at 80% through the segment
+        # This avoids both the initial transition AND the final transition
+        # Captures the segment in its most stable, complete state
+        if segment_duration < 2.0:
+            # Short segments: use midpoint
             extract_time = start_time + segment_duration / 2
         else:
-            # Extract as close to the end as possible (50ms before transition)
-            # This is ~1-2 frames before the cut, showing the complete slide
-            extract_time = end_time - 0.05
+            # Extract at 80% of segment duration
+            # This captures complete content before the next page flip
+            extract_time = start_time + (segment_duration * 0.8)
 
         # Clamp extract_time to video duration (avoid ffmpeg seeking beyond end)
         extract_time = min(extract_time, duration - 0.1)
