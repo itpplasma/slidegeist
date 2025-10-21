@@ -29,6 +29,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+mlx = ["mlx-whisper>=0.1.0"]
 web = ["yt-dlp>=2024.0.0"]
 dev = [
     "pytest>=7.0",

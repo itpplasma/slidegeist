@@ -1,10 +1,31 @@
 """Audio transcription using faster-whisper."""
 
 import logging
+import platform
 from pathlib import Path
 from typing import TypedDict
 
 logger = logging.getLogger(__name__)
+
+
+def is_mlx_available() -> bool:
+    """Check if MLX is available (Apple Silicon Mac).
+
+    Returns:
+        True if running on Apple Silicon with MLX support, False otherwise.
+    """
+    # Check if we're on macOS ARM64 (Apple Silicon)
+    if platform.system() != "Darwin":
+        return False
+    if platform.machine() != "arm64":
+        return False
+
+    # Try importing mlx-whisper
+    try:
+        import mlx_whisper  # type: ignore[import-untyped]  # noqa: F401
+        return True
+    except ImportError:
+        return False
 
 
 class Word(TypedDict):
@@ -30,7 +51,7 @@ class TranscriptResult(TypedDict):
 
 def transcribe_video(
     video_path: Path,
-    model_size: str = "base",
+    model_size: str = "large-v3",
     device: str = "cpu",
     compute_type: str = "int8"
 ) -> TranscriptResult:
@@ -38,8 +59,8 @@ def transcribe_video(
 
     Args:
         video_path: Path to the video file.
-        model_size: Whisper model size: tiny, base, small, medium, large.
-        device: Device to use: 'cpu' or 'cuda'.
+        model_size: Whisper model size: tiny, base, small, medium, large-v3, large-v2, large.
+        device: Device to use: 'cpu', 'cuda', or 'auto' (auto-detects MLX on Apple Silicon).
         compute_type: Computation type for CTranslate2.
                      Use 'int8' for CPU, 'float16' for GPU.
 
@@ -59,6 +80,55 @@ def transcribe_video(
 
     if not video_path.exists():
         raise FileNotFoundError(f"Video file not found: {video_path}")
+
+    # Auto-detect MLX on Apple Silicon
+    use_mlx = False
+    if device == "auto":
+        if is_mlx_available():
+            use_mlx = True
+            device = "cpu"  # MLX uses its own backend
+            logger.info("MLX detected - using MLX-optimized Whisper for Apple Silicon")
+        elif platform.system() == "Darwin" and platform.machine() == "arm64":
+            device = "cpu"
+            logger.info("Apple Silicon detected but MLX not available, using CPU. Install with: pip install mlx-whisper")
+        else:
+            device = "cpu"
+            logger.info("Auto-detected device: CPU")
+
+    # Use MLX-optimized transcription if available
+    if use_mlx:
+        try:
+            import mlx_whisper  # type: ignore[import-untyped]
+            logger.info(f"Loading MLX Whisper model: {model_size}")
+            result = mlx_whisper.transcribe(
+                str(video_path),
+                path_or_hf_repo=model_size,
+                word_timestamps=True,
+            )
+            # Convert MLX result to our format
+            mlx_segments: list[Segment] = []
+            for segment in result.get("segments", []):
+                mlx_words: list[Word] = []
+                for word in segment.get("words", []):
+                    mlx_words.append({
+                        "word": word["word"],
+                        "start": word["start"],
+                        "end": word["end"]
+                    })
+                mlx_segments.append({
+                    "start": segment["start"],
+                    "end": segment["end"],
+                    "text": segment["text"].strip(),
+                    "words": mlx_words
+                })
+            logger.info(f"MLX transcription complete: {len(mlx_segments)} segments")
+            return {
+                "language": result.get("language", "unknown"),
+                "segments": mlx_segments
+            }
+        except Exception as e:
+            logger.warning(f"MLX transcription failed ({e}), falling back to faster-whisper")
+            use_mlx = False
 
     # Adjust compute type based on device
     if device == "cuda" and compute_type == "int8":

@@ -15,8 +15,8 @@ def process_video(
     video_path: Path,
     output_dir: Path,
     scene_threshold: float = 0.4,
-    model: str = "base",
-    device: str = "cpu",
+    model: str = "large-v3",
+    device: str = "auto",
     image_format: str = "jpg",
     skip_slides: bool = False,
     skip_transcription: bool = False
@@ -148,8 +148,8 @@ def process_slides_only(
 def process_transcript_only(
     video_path: Path,
     output_dir: Path,
-    model: str = "base",
-    device: str = "cpu"
+    model: str = "large-v3",
+    device: str = "auto"
 ) -> Path:
     """Extract only transcript from video (no slides).
 

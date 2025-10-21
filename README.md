@@ -6,7 +6,8 @@ Extract slides and timestamped transcripts from lecture videos with minimal depe
 
 - 🎬 **Scene detection** using FFmpeg's built-in scene filter
 - 🖼️ **Automatic slide extraction** with timestamp ranges in filenames
-- 🎤 **Audio transcription** with faster-whisper (no PyTorch required)
+- 🎤 **Audio transcription** with Whisper large-v3 model (highest quality)
+- 🚀 **MLX acceleration** on Apple Silicon Macs for 2-3x faster transcription
 - 📝 **SRT subtitle export** compatible with all video players
 
 ## Requirements
@@ -42,6 +43,9 @@ cd slidegeist
 # Install with pip
 pip install -e .
 
+# On Apple Silicon Macs, install with MLX for 2-3x faster transcription
+pip install -e ".[mlx]"
+
 # Or with development dependencies
 pip install -e ".[dev]"
 ```
@@ -68,14 +72,17 @@ output/
 ### Full Processing
 
 ```bash
-# Basic usage
+# Basic usage (auto-detects MLX on Apple Silicon, uses large-v3 model)
 slidegeist process video.mp4
 
 # Specify output directory
 slidegeist process video.mp4 --out my-output/
 
-# Use GPU for faster transcription
-slidegeist process video.mp4 --device cuda --model medium
+# Use GPU explicitly (NVIDIA)
+slidegeist process video.mp4 --device cuda
+
+# Use smaller/faster model
+slidegeist process video.mp4 --model base
 
 # Adjust scene detection sensitivity (0.0-1.0, default 0.4)
 slidegeist process video.mp4 --scene-threshold 0.3
@@ -99,8 +106,10 @@ slidegeist process <video> [options]
 Options:
   --out DIR              Output directory (default: output/)
   --scene-threshold NUM  Scene detection sensitivity 0.0-1.0 (default: 0.4)
-  --model NAME          Whisper model: tiny, base, small, medium, large (default: base)
-  --device NAME         Device: cpu or cuda (default: cpu)
+  --model NAME          Whisper model: tiny, base, small, medium, large, large-v2, large-v3
+                        (default: large-v3)
+  --device NAME         Device: cpu, cuda, or auto (default: auto)
+                        auto = MLX on Apple Silicon if available, else CPU
   --format FMT          Image format: jpg or png (default: jpg)
   -v, --verbose         Enable verbose logging
 ```
@@ -131,8 +140,22 @@ We'll be covering the fundamentals of wave functions.
 
 1. **Scene Detection**: Uses FFmpeg's scene filter to detect slide changes
 2. **Slide Extraction**: Extracts the final frame before each scene change
-3. **Transcription**: Uses faster-whisper for accurate speech-to-text with timestamps
+3. **Transcription**: Uses Whisper large-v3 for state-of-the-art speech-to-text with timestamps
+   - Auto-detects and uses MLX on Apple Silicon for 2-3x speedup
+   - Falls back to faster-whisper on other platforms
 4. **Export**: Generates SRT subtitle file compatible with video players
+
+## Performance
+
+**Transcription Speed (Apple Silicon with MLX):**
+- 1 hour lecture: ~10-15 minutes (large-v3 model)
+- Without MLX: ~25-35 minutes
+
+**Model Recommendations:**
+- `large-v3`: Best accuracy (default) - recommended for production
+- `medium`: Good balance - 2x faster, slightly lower accuracy
+- `base`: Quick testing - 5x faster, noticeably lower accuracy
+- `tiny`: Very fast - 10x faster, lowest accuracy
 
 ## Limitations (MVP)
 

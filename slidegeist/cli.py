@@ -124,11 +124,14 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Process full video
+  # Process full video (uses large-v3 model with auto-detection)
   slidegeist process lecture.mp4
 
-  # Use GPU and larger model
-  slidegeist process lecture.mp4 --device cuda --model medium
+  # Use GPU explicitly
+  slidegeist process lecture.mp4 --device cuda
+
+  # Use smaller/faster model
+  slidegeist process lecture.mp4 --model base
 
   # Extract only slides
   slidegeist slides lecture.mp4
@@ -177,15 +180,15 @@ Examples:
     )
     process_parser.add_argument(
         "--model",
-        default="base",
-        choices=["tiny", "base", "small", "medium", "large"],
-        help="Whisper model size (default: base)"
+        default="large-v3",
+        choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"],
+        help="Whisper model size (default: large-v3)"
     )
     process_parser.add_argument(
         "--device",
-        default="cpu",
-        choices=["cpu", "cuda"],
-        help="Processing device (default: cpu)"
+        default="auto",
+        choices=["cpu", "cuda", "auto"],
+        help="Processing device (default: auto - uses MLX on Apple Silicon if available)"
     )
     process_parser.add_argument(
         "--format",
@@ -242,15 +245,15 @@ Examples:
     )
     transcribe_parser.add_argument(
         "--model",
-        default="base",
-        choices=["tiny", "base", "small", "medium", "large"],
-        help="Whisper model size (default: base)"
+        default="large-v3",
+        choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"],
+        help="Whisper model size (default: large-v3)"
     )
     transcribe_parser.add_argument(
         "--device",
-        default="cpu",
-        choices=["cpu", "cuda"],
-        help="Processing device (default: cpu)"
+        default="auto",
+        choices=["cpu", "cuda", "auto"],
+        help="Processing device (default: auto - uses MLX on Apple Silicon if available)"
     )
 
     args = parser.parse_args()
