@@ -10,7 +10,9 @@ import yt_dlp  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 
-BrowserType = Literal["firefox", "safari", "chrome", "chromium", "edge", "opera", "brave"]
+BrowserType = Literal[
+    "firefox", "safari", "chrome", "chromium", "edge", "opera", "brave"
+]
 
 
 def translate_url(url: str) -> str:
@@ -144,4 +146,7 @@ def is_url(input_str: str) -> bool:
     Returns:
         True if input looks like a URL, False otherwise.
     """
-    return input_str.startswith(("http://", "https://", "www."))
+    return (
+        input_str.startswith(("http://", "https://", "www."))
+        and len(input_str) > 7  # Minimum valid URL: "http://x" or "www.x.c"
+    )
