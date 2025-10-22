@@ -26,7 +26,6 @@ classifiers = [
 ]
 dependencies = [
     "faster-whisper>=1.0.0",
-    "scenedetect[opencv]>=0.6.0",
     "yt-dlp>=2024.0.0",
 ]
 

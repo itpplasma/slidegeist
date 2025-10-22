@@ -4,11 +4,11 @@ Extract slides and timestamped transcripts from lecture videos with minimal depe
 
 ## Features
 
-- 🎬 **Scene detection** using FFmpeg's built-in scene filter
-- 🖼️ **Automatic slide extraction** with timestamp ranges in filenames
-- 🎤 **Audio transcription** with Whisper large-v3 model (highest quality)
-- 🚀 **MLX acceleration** on Apple Silicon Macs for 2-3x faster transcription
-- 📝 **SRT subtitle export** compatible with all video players
+- **Scene detection** using global pixel difference (research-based method optimized for lecture videos)
+- **Automatic slide extraction** with timestamp ranges in filenames
+- **Audio transcription** with Whisper large-v3 model (highest quality)
+- **MLX acceleration** on Apple Silicon Macs for 2-3x faster transcription
+- **JSON export** with slides grouped by their transcripts
 
 ## Requirements
 
@@ -61,10 +61,10 @@ slidegeist process lecture.mp4 --out output/
 This creates:
 ```
 output/
-├── slide_000000000-000125300.jpg  # Slide from 0:00.000 to 2:05.300
-├── slide_000125300-000287600.jpg  # Slide from 2:05.300 to 4:47.600
-├── slide_000287600-000450000.jpg  # Slide from 4:47.600 to 7:30.000
-└── transcript.srt                  # Full transcript with timestamps
+├── slide_000_00:00:00-00:02:05.jpg  # Slide from 0:00 to 2:05
+├── slide_001_00:02:05-00:04:47.jpg  # Slide from 2:05 to 4:47
+├── slide_002_00:04:47-00:07:30.jpg  # Slide from 4:47 to 7:30
+└── slides.json                      # Slides with transcripts and metadata
 ```
 
 ## Usage
@@ -86,7 +86,7 @@ slidegeist process video.mp4 --model base
 
 # Adjust scene detection sensitivity (0.0-1.0, default 0.10)
 # Lower values detect more subtle changes, higher values only major transitions
-slidegeist process video.mp4 --scene-threshold 0.15
+slidegeist process video.mp4 --scene-threshold 0.05
 ```
 
 ### Individual Operations
@@ -119,32 +119,46 @@ Options:
 
 ### Slide Filenames
 
-Slides are named with their time range: `slide_[start_ms]-[end_ms].jpg`
+Slides are named with their time range: `slide_[index]_[HH:MM:SS]-[HH:MM:SS].jpg`
 
-- Timestamps in milliseconds (9 digits, zero-padded)
-- Example: `slide_000125300-000287600.jpg` covers 2:05.300 to 4:47.600
+- Index is zero-padded (at least 3 digits)
+- Timestamps in HH:MM:SS format
+- Example: `slide_001_00:02:05-00:04:47.jpg` is slide 1 covering 2:05 to 4:47
 
-### Transcript File
+### slides.json Format
 
-Standard SRT subtitle file format:
-```srt
-1
-00:00:00,000 --> 00:00:05,200
-Welcome to today's lecture on quantum mechanics.
-
-2
-00:00:05,200 --> 00:00:12,800
-We'll be covering the fundamentals of wave functions.
+JSON file with slides grouped by their transcripts:
+```json
+{
+  "metadata": {
+    "video_file": "lecture.mp4",
+    "duration_seconds": 3600,
+    "processed_at": "2025-01-15T10:30:00Z",
+    "model": "large-v3"
+  },
+  "slides": [
+    {
+      "slide_number": 0,
+      "image_path": "slide_000_00:00:00-00:02:05.jpg",
+      "time_start": 0,
+      "time_end": 125,
+      "transcript": "Welcome to today's lecture on quantum mechanics."
+    }
+  ]
+}
 ```
 
 ## How It Works
 
-1. **Scene Detection**: Uses FFmpeg's scene filter to detect slide changes
-2. **Slide Extraction**: Extracts the final frame before each scene change
+1. **Scene Detection**: Uses global pixel difference detection (research-based method) to identify slide changes
+   - Converts frames to binary (black/white) for robustness to lighting changes
+   - Computes normalized pixel differences between consecutive frames
+   - Based on "An experimental comparative study on slide change detection in lecture videos" (Eruvaram et al., 2018)
+2. **Slide Extraction**: Extracts the final frame before each scene change using FFmpeg
 3. **Transcription**: Uses Whisper large-v3 for state-of-the-art speech-to-text with timestamps
    - Auto-detects and uses MLX on Apple Silicon for 2-3x speedup
    - Falls back to faster-whisper on other platforms
-4. **Export**: Generates SRT subtitle file compatible with video players
+4. **Export**: Generates JSON file with slides grouped by their transcript text
 
 ## Performance
 
@@ -158,10 +172,9 @@ We'll be covering the fundamentals of wave functions.
 - `base`: Quick testing - 5x faster, noticeably lower accuracy
 - `tiny`: Very fast - 10x faster, lowest accuracy
 
-## Limitations (MVP)
+## Limitations
 
-- Works with local video files only (no web scraping)
-- Basic scene detection (may need threshold tuning for some videos)
+- Scene detection may need threshold tuning for some videos (default 0.10 works well for most lectures)
 - No speaker diarization
 - No automatic slide deduplication
 
