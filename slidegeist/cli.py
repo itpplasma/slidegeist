@@ -15,6 +15,7 @@ from slidegeist.constants import (
     DEFAULT_START_OFFSET,
     DEFAULT_WHISPER_MODEL,
 )
+from slidegeist.download import download_video, is_url
 from slidegeist.ffmpeg import check_ffmpeg_available
 from slidegeist.pipeline import process_slides_only, process_transcript_only, process_video
 
@@ -74,8 +75,18 @@ def handle_process(args: argparse.Namespace) -> None:
         check_prerequisites()
         validate_scene_threshold(args.scene_threshold)
 
+        # Download video if input is a URL
+        if is_url(args.input):
+            logger.info(f"Detected URL input: {args.input}")
+            video_path = download_video(
+                args.input,
+                cookies_from_browser=getattr(args, 'cookies_from_browser', None)
+            )
+        else:
+            video_path = Path(args.input)
+
         result = process_video(
-            video_path=args.input,
+            video_path=video_path,
             output_dir=args.out,
             scene_threshold=args.scene_threshold,
             min_scene_len=args.min_scene_len,
@@ -111,8 +122,18 @@ def handle_slides(args: argparse.Namespace) -> None:
         check_prerequisites()
         validate_scene_threshold(args.scene_threshold)
 
+        # Download video if input is a URL
+        if is_url(args.input):
+            logger.info(f"Detected URL input: {args.input}")
+            video_path = download_video(
+                args.input,
+                cookies_from_browser=getattr(args, 'cookies_from_browser', None)
+            )
+        else:
+            video_path = Path(args.input)
+
         result = process_slides_only(
-            video_path=args.input,
+            video_path=video_path,
             output_dir=args.out,
             scene_threshold=args.scene_threshold,
             min_scene_len=args.min_scene_len,
@@ -135,8 +156,18 @@ def handle_transcribe(args: argparse.Namespace) -> None:
     try:
         check_prerequisites()
 
+        # Download video if input is a URL
+        if is_url(args.input):
+            logger.info(f"Detected URL input: {args.input}")
+            video_path = download_video(
+                args.input,
+                cookies_from_browser=getattr(args, 'cookies_from_browser', None)
+            )
+        else:
+            video_path = Path(args.input)
+
         result = process_transcript_only(
-            video_path=args.input,
+            video_path=video_path,
             output_dir=args.out,
             model=args.model,
             device=args.device
@@ -195,14 +226,19 @@ Examples:
     common_parent = argparse.ArgumentParser(add_help=False)
     common_parent.add_argument(
         "input",
-        type=Path,
-        help="Input video file"
+        type=str,
+        help="Input video file path or URL (YouTube, Mediasite, etc.)"
     )
     common_parent.add_argument(
         "--out",
         type=Path,
         default=Path(DEFAULT_OUTPUT_DIR),
         help=f"Output directory (default: video filename)"
+    )
+    common_parent.add_argument(
+        "--cookies-from-browser",
+        choices=["firefox", "safari", "chrome", "chromium", "edge", "opera", "brave"],
+        help="Browser to extract cookies from for authenticated video downloads"
     )
 
     slides_parent = argparse.ArgumentParser(add_help=False)
