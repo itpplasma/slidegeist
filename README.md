@@ -194,9 +194,15 @@ ruff check slidegeist/
 mypy slidegeist/
 ```
 
+## Legal Notice
+
+Slidegeist is provided for educational and research purposes only.
+Users must ensure they have the legal right to access, download, or process any video files they use with this tool.
+The author does not endorse or facilitate copyright infringement or violation of platform terms of service.
+
 ## License
 
-MIT License - Copyright (c) 2025 Plasma Physics at TU Graz
+MIT License - Copyright (c) 2025 Christopher Albert
 
 See [LICENSE](LICENSE) for details.
 

@@ -54,6 +54,19 @@ def setup_logging(verbose: bool = False) -> None:
     )
 
 
+def display_legal_notice() -> None:
+    """Display legal notice for tool usage."""
+    print("\n" + "=" * 70)
+    print("Legal Notice")
+    print("-" * 70)
+    print("Slidegeist is provided for educational and research purposes only.")
+    print("Users must ensure they have the legal right to access, download, or")
+    print("process any video files they use with this tool.")
+    print("The author does not endorse or facilitate copyright infringement or")
+    print("violation of platform terms of service.")
+    print("=" * 70 + "\n")
+
+
 def check_prerequisites() -> None:
     """Check that required external tools are available.
 
@@ -90,6 +103,7 @@ def validate_scene_threshold(threshold: float) -> None:
 def handle_process(args: argparse.Namespace) -> None:
     """Handle 'slidegeist process' command."""
     try:
+        display_legal_notice()
         check_prerequisites()
         validate_scene_threshold(args.scene_threshold)
 
@@ -131,6 +145,7 @@ def handle_process(args: argparse.Namespace) -> None:
 def handle_slides(args: argparse.Namespace) -> None:
     """Handle 'slidegeist slides' command."""
     try:
+        display_legal_notice()
         check_prerequisites()
         validate_scene_threshold(args.scene_threshold)
 
@@ -160,6 +175,7 @@ def handle_slides(args: argparse.Namespace) -> None:
 def handle_transcribe(args: argparse.Namespace) -> None:
     """Handle 'slidegeist transcribe' command."""
     try:
+        display_legal_notice()
         check_prerequisites()
 
         video_path = resolve_video_path(
