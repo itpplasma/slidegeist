@@ -35,8 +35,10 @@ jobs:
       - name: Run unit tests (no network)
         run: |
           # Run only unit tests that don't require network access
-          # Currently all tests in test_download.py are offline (URL parsing/translation)
-          pytest tests/test_download.py -v --tb=short
+          # test_download.py: URL parsing/translation (offline)
+          # test_export.py: JSON export (offline)
+          # test_ffmpeg.py: filename formatting (offline)
+          pytest tests/test_download.py tests/test_export.py tests/test_ffmpeg.py -v --tb=short
 
       - name: Run type checking
         run: |
