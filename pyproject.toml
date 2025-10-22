@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "slidegeist"
-version = "0.1.0"
+version = "2025.10.22"
 description = "Extract slides and transcripts from lecture videos with minimal dependencies"
 readme = "README.md"
 license = { text = "MIT" }

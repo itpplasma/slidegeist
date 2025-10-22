@@ -14,7 +14,7 @@ Thank you for your interest in contributing to Slidegeist!
 
 ```bash
 # Clone the repository
-git clone https://github.com/itpplasma/slidegeist.git
+git clone https://github.com/krystophny/slidegeist.git
 cd slidegeist
 
 # Create a virtual environment
@@ -152,6 +152,59 @@ We welcome feature suggestions! Please:
 ## Questions?
 
 Feel free to open an issue for questions or discussion.
+
+## Release Process
+
+Slidegeist uses CalVer versioning with the format YYYY.MM.DD.
+
+### Creating a Release
+
+1. **Ensure all tests pass locally**
+   ```bash
+   pytest tests/test_download.py tests/test_export.py tests/test_ffmpeg.py -v
+   mypy slidegeist/download.py slidegeist/cli.py --strict
+   ```
+
+2. **Update pyproject.toml version**
+   ```bash
+   # Update version to CalVer format, e.g., 2025.10.22
+   vim pyproject.toml
+   ```
+
+3. **Commit version bump**
+   ```bash
+   git add pyproject.toml
+   git commit -m "Bump version to 2025.10.22"
+   git push origin main
+   ```
+
+4. **Create and push tag**
+   ```bash
+   git tag v2025.10.22
+   git push origin v2025.10.22
+   ```
+
+5. **Automated workflow**
+   - GitHub Actions will automatically build the package
+   - Create a GitHub release with release notes
+   - Publish to PyPI using trusted publishing
+
+### PyPI Setup
+
+Before the first release, configure PyPI trusted publishing:
+
+1. Go to https://pypi.org/manage/account/publishing/
+2. Add a new pending publisher:
+   - PyPI Project Name: `slidegeist`
+   - Owner: `krystophny`
+   - Repository name: `slidegeist`
+   - Workflow name: `release.yml`
+   - Environment name: leave blank
+
+### Version Format
+
+- **Releases**: YYYY.MM.DD (e.g., 2025.10.22)
+- **Development**: Use dev suffix in pyproject.toml between releases
 
 ## License
 
