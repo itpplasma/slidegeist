@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 from typing import Literal
 
-import yt_dlp
+import yt_dlp  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,8 @@ def download_video(
 
     Args:
         url: Video URL to download.
-        output_dir: Directory to save video. If None, uses temp directory.
+        output_dir: Directory to save video. If None, creates a temporary directory
+            with prefix 'slidegeist_'. Caller is responsible for cleanup of temp files.
         cookies_from_browser: Browser to extract cookies from for authentication.
             Supports: firefox, safari, chrome, chromium, edge, opera, brave.
 
@@ -58,7 +59,9 @@ def download_video(
         Path to the downloaded video file.
 
     Raises:
-        Exception: If download fails.
+        ValueError: If video information cannot be extracted from URL.
+        FileNotFoundError: If downloaded file cannot be found after download.
+        RuntimeError: If download fails for other reasons (network, permissions, etc.).
 
     Examples:
         # Public video
@@ -104,7 +107,7 @@ def download_video(
             info = ydl.extract_info(url, download=True)
 
             if info is None:
-                raise Exception("Failed to extract video information")
+                raise ValueError(f"Failed to extract video information from URL: {url}")
 
             # Get the downloaded file path
             if "requested_downloads" in info and info["requested_downloads"]:
@@ -120,9 +123,16 @@ def download_video(
             logger.info(f"Downloaded video to: {downloaded_file}")
             return downloaded_file
 
-    except Exception as e:
-        logger.error(f"Failed to download video: {e}")
+    except FileNotFoundError:
+        # Re-raise FileNotFoundError as-is
         raise
+    except ValueError:
+        # Re-raise ValueError as-is
+        raise
+    except Exception as e:
+        # Wrap other exceptions with context
+        logger.error(f"Failed to download video from {url}: {e}")
+        raise RuntimeError(f"Video download failed: {e}") from e
 
 
 def is_url(input_str: str) -> bool:
