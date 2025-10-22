@@ -55,7 +55,7 @@ pip install -e ".[dev]"
 Process a lecture video to extract slides and transcript:
 
 ```bash
-slidegeist process lecture.mp4 --out output/
+slidegeist lecture.mp4 --out output/
 ```
 
 This creates:
@@ -73,20 +73,23 @@ output/
 
 ```bash
 # Basic usage (auto-detects MLX on Apple Silicon, uses large-v3 model)
-slidegeist process video.mp4
+slidegeist video.mp4
 
 # Specify output directory
-slidegeist process video.mp4 --out my-output/
+slidegeist video.mp4 --out my-output/
 
 # Use GPU explicitly (NVIDIA)
-slidegeist process video.mp4 --device cuda
+slidegeist video.mp4 --device cuda
 
 # Use smaller/faster model
-slidegeist process video.mp4 --model base
+slidegeist video.mp4 --model base
 
 # Adjust scene detection sensitivity (0.0-1.0, default 0.10)
 # Lower values detect more subtle changes, higher values only major transitions
-slidegeist process video.mp4 --scene-threshold 0.05
+slidegeist video.mp4 --scene-threshold 0.05
+
+# Explicit process command (same as default)
+slidegeist process video.mp4
 ```
 
 ### Individual Operations
@@ -102,7 +105,8 @@ slidegeist transcribe video.mp4
 ## CLI Options
 
 ```
-slidegeist process <video> [options]
+slidegeist <video> [options]
+slidegeist {process,slides,transcribe} <video> [options]
 
 Options:
   --out DIR              Output directory (default: video filename)

@@ -209,20 +209,23 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Process video (slides + transcript with large-v3 model)
-  slidegeist process lecture.mp4
+  # Process video (slides + transcript with large-v3 model) - default mode
+  slidegeist lecture.mp4
 
   # Use smaller/faster model
-  slidegeist process lecture.mp4 --model tiny
+  slidegeist lecture.mp4 --model tiny
 
   # Use GPU explicitly
-  slidegeist process lecture.mp4 --device cuda
+  slidegeist lecture.mp4 --device cuda
 
   # Extract only slides (no transcription)
   slidegeist slides lecture.mp4
 
   # Extract only transcript (no slides)
   slidegeist transcribe lecture.mp4
+
+  # Explicit process command (same as default)
+  slidegeist process lecture.mp4
         """
     )
 
@@ -238,7 +241,67 @@ Examples:
         help="Enable verbose logging"
     )
 
-    # Create parent parsers for common arguments
+    # Add main positional argument for default mode
+    parser.add_argument(
+        "input",
+        type=str,
+        nargs="?",
+        help="Input video file path or URL (YouTube, Mediasite, etc.)"
+    )
+
+    # Add all process command arguments to main parser for default mode
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path(DEFAULT_OUTPUT_DIR),
+        help=f"Output directory (default: video filename)"
+    )
+    parser.add_argument(
+        "--cookies-from-browser",
+        choices=["firefox", "safari", "chrome", "chromium", "edge", "opera", "brave"],
+        help="Browser to extract cookies from for authenticated video downloads"
+    )
+    parser.add_argument(
+        "--scene-threshold",
+        type=float,
+        default=DEFAULT_SCENE_THRESHOLD,
+        metavar="NUM",
+        help=f"Scene detection threshold 0.02-0.05, lower=more sensitive (default: {DEFAULT_SCENE_THRESHOLD})"
+    )
+    parser.add_argument(
+        "--min-scene-len",
+        type=float,
+        default=DEFAULT_MIN_SCENE_LEN,
+        metavar="SEC",
+        help=f"Minimum scene length in seconds (default: {DEFAULT_MIN_SCENE_LEN})"
+    )
+    parser.add_argument(
+        "--start-offset",
+        type=float,
+        default=DEFAULT_START_OFFSET,
+        metavar="SEC",
+        help=f"Skip first N seconds to avoid mouse movement (default: {DEFAULT_START_OFFSET})"
+    )
+    parser.add_argument(
+        "--format",
+        default=DEFAULT_IMAGE_FORMAT,
+        choices=["jpg", "png"],
+        help=f"Slide image format (default: {DEFAULT_IMAGE_FORMAT})"
+    )
+    parser.add_argument(
+        "--model",
+        default=DEFAULT_WHISPER_MODEL,
+        choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"],
+        help=f"Whisper model size (default: {DEFAULT_WHISPER_MODEL})"
+    )
+    parser.add_argument(
+        "--device",
+        default=DEFAULT_DEVICE,
+        choices=["cpu", "cuda", "auto"],
+        help=f"Processing device (default: {DEFAULT_DEVICE} - uses MLX on Apple Silicon if available)"
+    )
+
+    # Create parent parsers for common arguments (for subcommands)
     common_parent = argparse.ArgumentParser(add_help=False)
     common_parent.add_argument(
         "input",
@@ -328,12 +391,17 @@ Examples:
     # Setup logging
     setup_logging(args.verbose)
 
-    # If no command specified, show help
+    # If no command specified, default to process (full pipeline)
     if args.command is None:
-        parser.print_help()
-        sys.exit(1)
+        # Check if input argument was provided
+        if args.input is None:
+            parser.print_help()
+            sys.exit(1)
+        # Default to process command
+        args.command = "process"
+
     # Dispatch to subcommand handlers
-    elif args.command == "process":
+    if args.command == "process":
         handle_process(args)
     elif args.command == "slides":
         handle_slides(args)
