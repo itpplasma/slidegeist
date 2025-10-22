@@ -241,66 +241,6 @@ Examples:
         help="Enable verbose logging"
     )
 
-    # Add main positional argument for default mode
-    parser.add_argument(
-        "input",
-        type=str,
-        nargs="?",
-        help="Input video file path or URL (YouTube, Mediasite, etc.)"
-    )
-
-    # Add all process command arguments to main parser for default mode
-    parser.add_argument(
-        "--out",
-        type=Path,
-        default=Path(DEFAULT_OUTPUT_DIR),
-        help=f"Output directory (default: video filename)"
-    )
-    parser.add_argument(
-        "--cookies-from-browser",
-        choices=["firefox", "safari", "chrome", "chromium", "edge", "opera", "brave"],
-        help="Browser to extract cookies from for authenticated video downloads"
-    )
-    parser.add_argument(
-        "--scene-threshold",
-        type=float,
-        default=DEFAULT_SCENE_THRESHOLD,
-        metavar="NUM",
-        help=f"Scene detection threshold 0.02-0.05, lower=more sensitive (default: {DEFAULT_SCENE_THRESHOLD})"
-    )
-    parser.add_argument(
-        "--min-scene-len",
-        type=float,
-        default=DEFAULT_MIN_SCENE_LEN,
-        metavar="SEC",
-        help=f"Minimum scene length in seconds (default: {DEFAULT_MIN_SCENE_LEN})"
-    )
-    parser.add_argument(
-        "--start-offset",
-        type=float,
-        default=DEFAULT_START_OFFSET,
-        metavar="SEC",
-        help=f"Skip first N seconds to avoid mouse movement (default: {DEFAULT_START_OFFSET})"
-    )
-    parser.add_argument(
-        "--format",
-        default=DEFAULT_IMAGE_FORMAT,
-        choices=["jpg", "png"],
-        help=f"Slide image format (default: {DEFAULT_IMAGE_FORMAT})"
-    )
-    parser.add_argument(
-        "--model",
-        default=DEFAULT_WHISPER_MODEL,
-        choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"],
-        help=f"Whisper model size (default: {DEFAULT_WHISPER_MODEL})"
-    )
-    parser.add_argument(
-        "--device",
-        default=DEFAULT_DEVICE,
-        choices=["cpu", "cuda", "auto"],
-        help=f"Processing device (default: {DEFAULT_DEVICE} - uses MLX on Apple Silicon if available)"
-    )
-
     # Create parent parsers for common arguments (for subcommands)
     common_parent = argparse.ArgumentParser(add_help=False)
     common_parent.add_argument(
@@ -386,19 +326,28 @@ Examples:
         help="Extract only transcript (no slides)"
     )
 
-    args = parser.parse_args()
+    # Parse arguments with special handling for default mode
+    # Check if first positional arg is a subcommand or a video input
+    import sys as sys_module
+    argv = sys_module.argv[1:]
+
+    # If first arg is not a known subcommand and looks like input, inject 'process'
+    if argv and argv[0] not in ['-h', '--help', '--version', '-v', '--verbose'] and \
+       argv[0] not in ['process', 'slides', 'transcribe'] and \
+       not argv[0].startswith('-'):
+        # First positional arg is likely video input, default to process mode
+        argv = ['process'] + argv
+        args = parser.parse_args(argv)
+    else:
+        args = parser.parse_args()
 
     # Setup logging
     setup_logging(args.verbose)
 
-    # If no command specified, default to process (full pipeline)
+    # If no command specified, show help
     if args.command is None:
-        # Check if input argument was provided
-        if args.input is None:
-            parser.print_help()
-            sys.exit(1)
-        # Default to process command
-        args.command = "process"
+        parser.print_help()
+        sys.exit(1)
 
     # Dispatch to subcommand handlers
     if args.command == "process":
