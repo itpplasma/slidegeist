@@ -266,7 +266,7 @@ Examples:
         type=float,
         default=DEFAULT_SCENE_THRESHOLD,
         metavar="NUM",
-        help=f"Scene detection threshold 0.02-0.05, lower=more sensitive (default: {DEFAULT_SCENE_THRESHOLD})"
+        help=f"Scene detection sensitivity 0.0-1.0, lower=more sensitive (default: {DEFAULT_SCENE_THRESHOLD})"
     )
     slides_parent.add_argument(
         "--min-scene-len",
