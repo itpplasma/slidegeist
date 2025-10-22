@@ -37,9 +37,6 @@ jobs:
           # Run only unit tests that don't require network access
           # Currently all tests in test_download.py are offline (URL parsing/translation)
           pytest tests/test_download.py tests/test_export.py -v --tb=short
-        env:
-          # Ensure no network access during tests
-          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
 
       - name: Run type checking
         run: |
