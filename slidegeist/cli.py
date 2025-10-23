@@ -238,7 +238,14 @@ Examples:
     )
 
     # Create parent parsers for common arguments (for subcommands)
-    common_parent = argparse.ArgumentParser(add_help=False)
+    verbose_parent = argparse.ArgumentParser(add_help=False)
+    verbose_parent.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Enable verbose logging"
+    )
+
+    common_parent = argparse.ArgumentParser(add_help=False, parents=[verbose_parent])
     common_parent.add_argument(
         "input",
         type=str,
