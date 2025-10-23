@@ -214,8 +214,8 @@ def detect_slides_adaptive(
     video_path: Path,
     start_offset: float = 3.0,
     min_scene_len: float = 2.0,
-    threshold_range: tuple[float, float] = (0.015, 0.05),
-    threshold_steps: int = 8,
+    threshold_range: tuple[float, float] = (0.01, 0.10),
+    threshold_step: float = 0.001,
     sample_interval: float = 1.0,
     max_resolution: int = 360,
     target_fps: float = 5.0,
@@ -230,7 +230,7 @@ def detect_slides_adaptive(
         start_offset: Skip first N seconds.
         min_scene_len: Minimum scene length in seconds.
         threshold_range: (min, max) threshold values to test.
-        threshold_steps: Number of thresholds to test in sweep.
+        threshold_step: Step size for threshold sweep (default 0.001).
         sample_interval: Time between compared frames.
         max_resolution: Max height for processing.
         target_fps: Target FPS for processing.
@@ -348,8 +348,8 @@ def detect_slides_adaptive(
 
     logger.info(f"Computed {len(frame_diffs)} frame differences")
 
-    # Step 2: Sweep thresholds and count slides for each
-    thresholds = np.linspace(threshold_range[0], threshold_range[1], threshold_steps)
+    # Step 2: Sweep thresholds on regular grid (e.g., 0.010, 0.011, 0.012, ...)
+    thresholds = np.arange(threshold_range[0], threshold_range[1] + threshold_step, threshold_step)
     slide_counts = []
 
     for thresh in thresholds:
