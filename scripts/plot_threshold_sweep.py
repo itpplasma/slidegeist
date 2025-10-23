@@ -369,6 +369,33 @@ def plot_sweep(
         upper = expected_slides * 1.2
         ax.axhspan(lower, upper, alpha=0.1, color='green', label='±20% range')
 
+        # Mark optimal thresholds for each method
+        # Find where each method crosses expected_slides
+        # slidegeist
+        diffs_sg = np.abs(slide_counts - expected_slides)
+        if diffs_sg.min() <= 2:  # Within 2 slides
+            idx_sg = np.argmin(diffs_sg)
+            opt_thresh_sg = normalized_thresholds_sg[idx_sg]
+            ax.plot(opt_thresh_sg, slide_counts[idx_sg], 'b*', markersize=15,
+                   markeredgecolor='white', markeredgewidth=1.5, zorder=20,
+                   label=f'slidegeist optimal')
+
+        # PySceneDetect methods
+        if pyscene_results:
+            colors_marker = ['red', 'orange', 'purple']
+            for idx, (detector_name, pyscene_thresholds, pyscene_counts) in enumerate(pyscene_results):
+                diffs = np.abs(pyscene_counts - expected_slides)
+                if diffs.min() <= 2:
+                    idx_opt = np.argmin(diffs)
+                    # Normalize the optimal threshold
+                    thresh_min = pyscene_thresholds.min()
+                    thresh_max = pyscene_thresholds.max()
+                    opt_thresh_norm = (pyscene_thresholds[idx_opt] - thresh_min) / (thresh_max - thresh_min)
+
+                    ax.plot(opt_thresh_norm, pyscene_counts[idx_opt], '*',
+                           color=colors_marker[idx % len(colors_marker)], markersize=15,
+                           markeredgecolor='white', markeredgewidth=1.5, zorder=20)
+
     ax.set_xlabel('Normalized Threshold (log scale)', fontsize=12)
     ax.set_ylabel('Number of Slides (log scale)', fontsize=12)
     ax.set_xscale('log')
