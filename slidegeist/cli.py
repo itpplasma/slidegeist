@@ -15,7 +15,7 @@ from slidegeist.constants import (
     DEFAULT_START_OFFSET,
     DEFAULT_WHISPER_MODEL,
 )
-from slidegeist.download import BrowserType, download_video, is_url
+from slidegeist.download import BrowserType, download_video, get_video_filename, is_url
 from slidegeist.ffmpeg import check_ffmpeg_available
 from slidegeist.pipeline import process_slides_only, process_video
 
@@ -115,9 +115,9 @@ def handle_process(args: argparse.Namespace) -> None:
         if output_dir == Path(DEFAULT_OUTPUT_DIR):
             # Need to determine from input
             if is_url(args.input):
-                # For URLs, we'll use video filename after downloading
-                # Pass None temporarily and resolve in process_video
-                output_dir = args.out
+                # For URLs, get video filename before downloading
+                video_filename = get_video_filename(args.input, getattr(args, 'cookies_from_browser', None))
+                output_dir = Path.cwd() / video_filename
             else:
                 # For local files, use video filename immediately
                 output_dir = Path.cwd() / Path(args.input).stem
@@ -145,8 +145,8 @@ def handle_process(args: argparse.Namespace) -> None:
         print("=" * 60)
         if 'slides' in result:
             print(f"  Slides:      {len(result['slides'])} images")  # type: ignore
-        if 'slides_json' in result:
-            print(f"  slides.json: {result['slides_json']}")
+        if 'index_md' in result:
+            print(f"  index.md:    {result['index_md']}")
         print(f"  Output dir:  {result['output_dir']}")
         print("=" * 60)
 
@@ -171,7 +171,9 @@ def handle_slides(args: argparse.Namespace) -> None:
         output_dir = args.out
         if output_dir == Path(DEFAULT_OUTPUT_DIR):
             if is_url(args.input):
-                output_dir = args.out
+                # For URLs, get video filename before downloading
+                video_filename = get_video_filename(args.input, getattr(args, 'cookies_from_browser', None))
+                output_dir = Path.cwd() / video_filename
             else:
                 output_dir = Path.cwd() / Path(args.input).stem
 

@@ -17,6 +17,11 @@ def test_process_video_produces_slides_json(tmp_path: Path, monkeypatch: pytest.
     """Ensure process_video writes slides.json and returns paths."""
 
     class _IntegrationOcrStub:
+        class _PrimaryStub:
+            is_available = True
+
+        _primary = _PrimaryStub()
+
         def process(self, image_path: Path, transcript_full_text: str, transcript_segments: list[dict[str, Any]]) -> dict[str, Any]:
             return {
                 "engine": {
@@ -46,11 +51,12 @@ def test_process_video_produces_slides_json(tmp_path: Path, monkeypatch: pytest.
         output_dir: Path,
         image_format: str
     ) -> list[tuple[int, float, float, Path]]:
-        output_dir.mkdir(parents=True, exist_ok=True)
+        slides_dir = output_dir / "slides"
+        slides_dir.mkdir(parents=True, exist_ok=True)
         paths: list[tuple[int, float, float, Path]] = []
         for index, start in enumerate([0.0, 2.0]):
             end = start + 2.0
-            slide_path = output_dir / f"slide_{index:03d}.{image_format}"
+            slide_path = slides_dir / f"slide_{index:03d}.{image_format}"
             slide_path.write_bytes(b"fake image")
             paths.append((index, start, end, slide_path))
         return paths
@@ -86,20 +92,25 @@ def test_process_video_produces_slides_json(tmp_path: Path, monkeypatch: pytest.
     assert isinstance(slides, list)
     assert len(slides) == 2
 
-    json_path = result.get("slides_json")
-    assert isinstance(json_path, Path)
-    assert json_path.exists()
+    # Check index markdown exists
+    index_md = result.get("index_md")
+    assert isinstance(index_md, Path)
+    assert index_md.exists()
+    index_content = index_md.read_text()
+    assert "# Lecture Slides" in index_content
 
-    manifest = json.loads(json_path.read_text())
-    assert len(manifest["slides"]) == 2
-    first_entry = manifest["slides"][0]
-    assert first_entry["time_start"] == 0.0
-    per_slide_path = json_path.parent / first_entry["json_path"]
-    assert per_slide_path.exists()
+    # Check individual slide markdown files
+    output_dir = result.get("output_dir")
+    assert isinstance(output_dir, Path)
 
-    slide_payload = json.loads(per_slide_path.read_text())
-    assert slide_payload["transcript"]["full_text"] == "Hello"
-    assert slide_payload["ocr"]["visual_elements"] == ["box"]
+    slide_000_md = output_dir / "slide_000.md"
+    assert slide_000_md.exists()
+    slide_000_content = slide_000_md.read_text()
+    assert "---" in slide_000_content  # YAML frontmatter
+    assert "id: slide_000" in slide_000_content
+    assert "time_start: 0.0" in slide_000_content
+    assert "Hello" in slide_000_content
+    assert "refined" in slide_000_content  # OCR content
 
 
 def test_cli_process_default_invocation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -107,22 +118,21 @@ def test_cli_process_default_invocation(monkeypatch: pytest.MonkeyPatch, tmp_pat
     output_dir = tmp_path / "cli-out"
 
     def fake_process_video(*_: Any, **__: Any) -> dict[str, Any]:
-        json_path = output_dir / "slides.json"
+        index_md = output_dir / "index.md"
         output_dir.mkdir(parents=True, exist_ok=True)
-        json_path.write_text('{"slides": []}')
+        index_md.write_text('# Lecture Slides')
         return {
             "output_dir": output_dir,
             "slides": [],
-            "slides_json": json_path,
+            "index_md": index_md,
         }
 
     monkeypatch.setattr("slidegeist.cli.process_video", fake_process_video)
     monkeypatch.setattr("slidegeist.cli.check_prerequisites", lambda: None)
-    monkeypatch.setattr("slidegeist.cli.resolve_video_path", lambda value, cookies_from_browser=None: Path(value))
+    monkeypatch.setattr("slidegeist.cli.resolve_video_path", lambda input_str, output_dir, cookies_from_browser=None: Path(input_str))
     monkeypatch.setattr(sys, "argv", ["slidegeist", str(tmp_path / "input.mp4")])
 
     cli.main()
 
     captured = capsys.readouterr()
     assert "Processing complete" in captured.out
-    assert "slides.json" in captured.out

@@ -194,6 +194,44 @@ def download_video(
         raise RuntimeError(f"Video download failed: {e}") from e
 
 
+def get_video_filename(url: str, cookies_from_browser: BrowserType | None = None) -> str:
+    """Get the filename that would be used for a video URL without downloading.
+
+    Args:
+        url: Video URL.
+        cookies_from_browser: Browser to extract cookies from (needed for authenticated videos).
+
+    Returns:
+        Filename (stem without extension) that will be used for the video.
+
+    Raises:
+        ValueError: If video information cannot be extracted.
+    """
+    url = translate_url(url)
+
+    ydl_opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": False,
+    }
+
+    if cookies_from_browser:
+        ydl_opts["cookiesfrombrowser"] = (cookies_from_browser,)
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            if info is None:
+                raise ValueError(f"Failed to extract video information from URL: {url}")
+
+            # Get sanitized filename
+            sanitized_title = ydl.prepare_filename(info)
+            return Path(sanitized_title).stem
+
+    except Exception as e:
+        raise ValueError(f"Failed to get video filename from {url}: {e}") from e
+
+
 def is_url(input_str: str) -> bool:
     """Check if input string is a URL.
 
