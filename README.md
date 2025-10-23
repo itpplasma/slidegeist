@@ -84,7 +84,7 @@ slidegeist video.mp4 --device cuda
 # Use smaller/faster model
 slidegeist video.mp4 --model base
 
-# Adjust scene detection sensitivity (0.0-1.0, default 0.02)
+# Adjust scene detection sensitivity (0.0-1.0, default 0.025)
 # Lower values detect more subtle changes, higher values only major transitions
 slidegeist video.mp4 --scene-threshold 0.015
 
@@ -107,7 +107,7 @@ slidegeist {process,slides} <video> [options]
 
 Options:
   --out DIR              Output directory (default: video filename)
-  --scene-threshold NUM  Scene detection sensitivity 0.0-1.0 (default: 0.02)
+  --scene-threshold NUM  Scene detection sensitivity 0.0-1.0 (default: 0.025)
   --model NAME          Whisper model: tiny, base, small, medium, large, large-v2, large-v3
                         (default: large-v3)
   --device NAME         Device: cpu, cuda, or auto (default: auto)
@@ -151,10 +151,10 @@ JSON file with slides grouped by their transcripts:
 
 ## How It Works
 
-1. **Scene Detection**: Uses global pixel difference detection (research-based method) to identify slide changes
-   - Converts frames to binary (black/white) for robustness to lighting changes
-   - Computes normalized pixel differences between consecutive frames
-   - Based on "An experimental comparative study on slide change detection in lecture videos" (Eruvaram et al., 2018)
+1. **Scene Detection**: Uses FFmpeg's scene filter (SAD-based) with an Opencast-style optimizer to identify slide changes
+   - Iteratively adjusts the scene threshold to target ~30 segments per hour (typical slide pace)
+   - Merges segments shorter than 2 seconds to suppress rapid flickers
+   - Based on Opencast's VideoSegmenterService implementation
 2. **Slide Extraction**: Extracts the final frame before each scene change using FFmpeg
 3. **Transcription**: Uses Whisper large-v3 for state-of-the-art speech-to-text with timestamps
    - Auto-detects and uses MLX on Apple Silicon for 2-3x speedup
@@ -175,7 +175,7 @@ JSON file with slides grouped by their transcripts:
 
 ## Limitations
 
-- Scene detection may need threshold tuning for some videos (default 0.02 works well for most lectures, try 0.015 for maximum sensitivity or 0.03+ for only major transitions)
+- Scene detection may need threshold tuning for some videos (default 0.025 works well for most lectures, try 0.015 for maximum sensitivity or 0.03+ for only major transitions)
 - No speaker diarization
 - No automatic slide deduplication
 

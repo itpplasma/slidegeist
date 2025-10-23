@@ -19,6 +19,84 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+def _preprocess_video_if_needed(
+    video_path: Path,
+    max_resolution: int,
+    target_fps: float
+) -> tuple[Path, object | None, float]:
+    """Return optimized video for processing if scaling or decimation is needed."""
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        raise RuntimeError(f"Failed to open video: {video_path}")
+
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    cap.release()
+
+    if fps <= 0:
+        fps = 30.0
+
+    needs_processing = height > max_resolution or fps > target_fps
+    if not needs_processing:
+        return video_path, None, fps
+
+    scale = max_resolution / height if height > max_resolution else 1.0
+    new_width = max(2, (int(width * scale) // 2) * 2)
+    new_height = max(2, (int(height * scale) // 2) * 2)
+
+    filters = []
+    if scale < 1.0:
+        filters.append(f"scale={new_width}:{new_height}")
+
+    working_fps = fps
+    if fps > target_fps:
+        fps_ratio = max(1, int(round(fps / target_fps)))
+        working_fps = fps / fps_ratio
+        filters.append(f"fps=fps={working_fps}")
+
+    filter_str = ",".join(filters)
+
+    logger.info(
+        "Preprocessing video: %dx%d@%.2ffps -> %dx%d@%.2ffps",
+        width,
+        height,
+        fps,
+        new_width,
+        new_height,
+        working_fps,
+    )
+
+    temp_file = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+    temp_file.close()
+
+    cmd = [
+        "ffmpeg",
+        "-i",
+        str(video_path),
+        "-vf",
+        filter_str,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        "28",
+        "-y",
+        temp_file.name,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        logger.error("FFmpeg error during preprocessing: %s", result.stderr)
+        try:
+            os.unlink(temp_file.name)
+        except OSError:
+            pass
+        raise RuntimeError("Video preprocessing failed")
+
+    return Path(temp_file.name), temp_file, working_fps
+
+
 def detect_slides_pixel_diff(
     video_path: Path,
     start_offset: float = 3.0,
@@ -488,9 +566,9 @@ def detect_slides_normalized(
         List of timestamps where slide changes occur.
     """
     # Preprocess video if needed
-    temp_file = None
+    temp_handle = None
     try:
-        working_path, temp_file = _preprocess_video_if_needed(
+        working_path, temp_handle, working_fps = _preprocess_video_if_needed(
             video_path, max_resolution, target_fps
         )
 
@@ -499,34 +577,44 @@ def detect_slides_normalized(
             raise RuntimeError(f"Failed to open video: {working_path}")
 
         fps = cap.get(cv2.CAP_PROP_FPS)
+        if fps <= 0:
+            fps = working_fps
         working_fps = fps
 
-        start_frame = int(start_offset * fps)
-        min_frames_between = int(min_scene_len * fps)
-        window_frames = int(window_seconds * fps)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        start_frame = int(start_offset * working_fps)
+        frame_interval = max(1, int(round(sample_interval * working_fps)))
+        min_frames_between = max(1, int(round(min_scene_len * working_fps)))
+        window_frames = max(1, int(round(window_seconds * working_fps)))
 
         # Compute all raw frame differences first
         frame_diffs = []  # List of (frame_num, raw_diff)
         prev_frame_binary = None
-        frame_num = 0
+        frame_num = start_frame
+
+        cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
 
         logger.info(f"Computing frame differences (fps={working_fps:.1f})...")
 
-        while True:
+        while frame_num < total_frames:
             ret, frame = cap.read()
             if not ret:
                 break
 
-            if frame_num < start_frame:
+            if (frame_num - start_frame) % frame_interval != 0:
                 frame_num += 1
                 continue
 
             # Convert to grayscale and binarize
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            _, binary = cv2.threshold(gray, 0, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            _, binary = cv2.threshold(
+                gray, 0, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+            )
 
             if prev_frame_binary is not None:
-                diff = np.abs(binary - prev_frame_binary)
+                diff = np.abs(
+                    binary.astype(np.int16) - prev_frame_binary.astype(np.int16)
+                )
                 raw_diff = np.count_nonzero(diff) / binary.size
                 frame_diffs.append((frame_num, raw_diff))
 
@@ -587,10 +675,10 @@ def detect_slides_normalized(
 
     finally:
         # Clean up temp file if created
-        if temp_file is not None:
+        if temp_handle is not None:
             try:
-                os.unlink(temp_file.name)
-                logger.debug(f"Cleaned up temporary file {temp_file.name}")
+                os.unlink(temp_handle.name)
+                logger.debug(f"Cleaned up temporary file {temp_handle.name}")
             except Exception:
                 pass
 
