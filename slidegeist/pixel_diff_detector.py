@@ -446,3 +446,153 @@ def _find_optimal_threshold_idx(slide_counts: list[int], thresholds: np.ndarray)
     )
 
     return optimal_idx
+
+
+def detect_slides_normalized(
+    video_path: Path,
+    start_offset: float = 3.0,
+    min_scene_len: float = 2.0,
+    z_threshold: float = 3.0,
+    window_seconds: float = 7.0,
+    sample_interval: float = 1.0,
+    max_resolution: int = 360,
+    target_fps: float = 5.0
+) -> list[float]:
+    """Detect slide changes using rolling window normalization.
+
+    This method addresses the heavy-tailed distribution problem by computing
+    z-scores relative to a local rolling window. This makes the threshold
+    video-independent and robust to varying baseline noise levels.
+
+    Method:
+        1. Compute raw frame differences (median pixel difference)
+        2. For each frame, compute rolling window statistics:
+           - median m_t over window [t-W, t)
+           - MAD (median absolute deviation) s_t over window
+        3. Normalize: z_t = (d_t - m_t) / (s_t + epsilon)
+        4. Threshold on z-score (typically z > 3.0 for outliers)
+
+    Args:
+        video_path: Path to video file.
+        start_offset: Skip first N seconds.
+        min_scene_len: Minimum scene length in seconds (refractory period).
+        z_threshold: Z-score threshold for detection (default 3.0).
+                    Typical range: 2.5-4.0. Higher = less sensitive.
+        window_seconds: Rolling window size in seconds (default 7.0).
+                       Typical range: 5-10 seconds.
+        sample_interval: Time between compared frames.
+        max_resolution: Maximum resolution for processing.
+        target_fps: Target frame rate for processing.
+
+    Returns:
+        List of timestamps where slide changes occur.
+    """
+    # Preprocess video if needed
+    temp_file = None
+    try:
+        working_path, temp_file = _preprocess_video_if_needed(
+            video_path, max_resolution, target_fps
+        )
+
+        cap = cv2.VideoCapture(str(working_path))
+        if not cap.isOpened():
+            raise RuntimeError(f"Failed to open video: {working_path}")
+
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        working_fps = fps
+
+        start_frame = int(start_offset * fps)
+        min_frames_between = int(min_scene_len * fps)
+        window_frames = int(window_seconds * fps)
+
+        # Compute all raw frame differences first
+        frame_diffs = []  # List of (frame_num, raw_diff)
+        prev_frame_binary = None
+        frame_num = 0
+
+        logger.info(f"Computing frame differences (fps={working_fps:.1f})...")
+
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            if frame_num < start_frame:
+                frame_num += 1
+                continue
+
+            # Convert to grayscale and binarize
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            _, binary = cv2.threshold(gray, 0, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+            if prev_frame_binary is not None:
+                diff = np.abs(binary - prev_frame_binary)
+                raw_diff = np.count_nonzero(diff) / binary.size
+                frame_diffs.append((frame_num, raw_diff))
+
+            prev_frame_binary = binary
+            frame_num += 1
+
+        cap.release()
+
+        if len(frame_diffs) == 0:
+            logger.warning("No frames to process")
+            return []
+
+        logger.info(f"Computed {len(frame_diffs)} frame differences")
+
+        # Compute rolling window z-scores
+        diffs_array = np.array([d for _, d in frame_diffs])
+        z_scores = np.zeros(len(diffs_array))
+
+        logger.info(f"Computing z-scores with {window_seconds}s window...")
+
+        for i in range(len(diffs_array)):
+            # Window: [max(0, i-W), i)
+            window_start = max(0, i - window_frames)
+            window = diffs_array[window_start:i]
+
+            if len(window) < 2:
+                z_scores[i] = 0.0
+                continue
+
+            # Compute robust statistics
+            m_t = np.median(window)
+            mad = np.median(np.abs(window - m_t))
+            s_t = 1.4826 * mad  # Scale factor for MAD to approximate std
+
+            # Normalize with small epsilon to avoid division by zero
+            epsilon = 1e-6
+            z_scores[i] = (diffs_array[i] - m_t) / (s_t + epsilon)
+
+        # Detect slides using z-score threshold + refractory period
+        timestamps = []
+        last_change_frame = start_frame - min_frames_between  # Allow first detection
+
+        logger.info(f"Detecting slides with z-threshold={z_threshold:.1f}...")
+
+        for i, (frame_num, raw_diff) in enumerate(frame_diffs):
+            z_score = z_scores[i]
+
+            if z_score >= z_threshold:
+                if frame_num - last_change_frame >= min_frames_between:
+                    timestamp = frame_num / working_fps
+                    timestamps.append(timestamp)
+                    last_change_frame = frame_num
+
+                    logger.debug(
+                        f"Slide change at {timestamp:.2f}s "
+                        f"(frame {frame_num}, z={z_score:.2f}, raw={raw_diff:.4f})"
+                    )
+
+    finally:
+        # Clean up temp file if created
+        if temp_file is not None:
+            try:
+                os.unlink(temp_file.name)
+                logger.debug(f"Cleaned up temporary file {temp_file.name}")
+            except Exception:
+                pass
+
+    logger.info(f"Found {len(timestamps)} slide changes")
+    return timestamps

@@ -187,6 +187,95 @@ def sweep_thresholds(
     return thresholds, np.array(slide_counts)
 
 
+def compute_z_scores(
+    frame_diffs: list[tuple[int, float]],
+    window_seconds: float = 7.0,
+    working_fps: float = 5.0
+) -> np.ndarray:
+    """Compute rolling window z-scores for frame differences.
+
+    Args:
+        frame_diffs: List of (frame_num, diff_value) tuples.
+        window_seconds: Rolling window size in seconds.
+        working_fps: Frame rate of the video.
+
+    Returns:
+        Array of z-scores, same length as frame_diffs.
+    """
+    diffs_array = np.array([d for _, d in frame_diffs])
+    z_scores = np.zeros(len(diffs_array))
+    window_frames = int(window_seconds * working_fps)
+
+    print(f"Computing z-scores with {window_seconds}s window ({window_frames} frames)...")
+
+    for i in range(len(diffs_array)):
+        # Window: [max(0, i-W), i)
+        window_start = max(0, i - window_frames)
+        window = diffs_array[window_start:i]
+
+        if len(window) < 2:
+            z_scores[i] = 0.0
+            continue
+
+        # Compute robust statistics using MAD
+        m_t = np.median(window)
+        mad = np.median(np.abs(window - m_t))
+        s_t = 1.4826 * mad  # Scale factor for MAD to approximate std
+
+        # Normalize with small epsilon to avoid division by zero
+        epsilon = 1e-6
+        z_scores[i] = (diffs_array[i] - m_t) / (s_t + epsilon)
+
+    return z_scores
+
+
+def sweep_z_thresholds(
+    frame_diffs: list[tuple[int, float]],
+    z_scores: np.ndarray,
+    working_fps: float,
+    z_threshold_range: tuple[float, float] = (2.0, 5.0),
+    z_threshold_step: float = 0.1,
+    min_scene_len: float = 2.0,
+    start_offset: float = 3.0
+) -> tuple[np.ndarray, np.ndarray]:
+    """Sweep over z-score thresholds and count detections.
+
+    Args:
+        frame_diffs: List of (frame_num, diff_value) tuples.
+        z_scores: Array of z-scores for each frame.
+        working_fps: Frame rate of the video.
+        z_threshold_range: (min, max) z-score thresholds to test.
+        z_threshold_step: Step size for z-threshold sweep.
+        min_scene_len: Minimum scene length in seconds (refractory period).
+        start_offset: Offset in seconds to start detection.
+
+    Returns:
+        Tuple of (z_thresholds, slide_counts) arrays.
+    """
+    min_frames_between = int(min_scene_len * working_fps)
+    start_frame = int(start_offset * working_fps)
+
+    z_min, z_max = z_threshold_range
+    z_thresholds = np.arange(z_min, z_max + z_threshold_step, z_threshold_step)
+    slide_counts = []
+
+    print(f"Sweeping {len(z_thresholds)} z-thresholds from {z_min:.1f} to {z_max:.1f}...")
+
+    for z_thresh in z_thresholds:
+        count = 0
+        last_change_frame = start_frame - min_frames_between
+
+        for i, (frame_num, _) in enumerate(frame_diffs):
+            if z_scores[i] >= z_thresh:
+                if frame_num - last_change_frame >= min_frames_between:
+                    count += 1
+                    last_change_frame = frame_num
+
+        slide_counts.append(count)
+
+    return z_thresholds, np.array(slide_counts)
+
+
 def compute_pyscenedetect_scores(video_path: Path, detector_name: str) -> tuple[list[float], float, str]:
     """Compute PySceneDetect detector scores using stats file.
 
@@ -316,7 +405,8 @@ def plot_sweep(
     slide_counts: np.ndarray,
     expected_slides: int | None = None,
     video_name: str = "Video",
-    pyscene_results: list[tuple[str, np.ndarray, np.ndarray]] | None = None
+    pyscene_results: list[tuple[str, np.ndarray, np.ndarray]] | None = None,
+    z_score_results: tuple[np.ndarray, np.ndarray] | None = None
 ):
     """Plot threshold sweep results.
 
@@ -326,6 +416,7 @@ def plot_sweep(
         expected_slides: expected slide count
         video_name: video filename
         pyscene_results: list of (detector_name, thresholds, counts) tuples
+        z_score_results: tuple of (z_thresholds, z_slide_counts)
     """
     if not HAS_MATPLOTLIB:
         print("\nCannot plot without matplotlib")
@@ -364,6 +455,18 @@ def plot_sweep(
                     linewidth=2, label=label, alpha=0.8)
             ax.scatter(normalized_thresholds, pyscene_counts, c=color, s=20, alpha=0.5)
 
+    # Plot z-score results if available
+    if z_score_results:
+        z_thresholds, z_slide_counts = z_score_results
+        # Normalize z-thresholds to 0-1 range
+        z_min = z_thresholds.min()
+        z_max = z_thresholds.max()
+        normalized_z_thresholds = (z_thresholds - z_min) / (z_max - z_min)
+
+        ax.plot(normalized_z_thresholds, z_slide_counts, color='purple', linestyle='-',
+                linewidth=2.5, label=f'slidegeist (z-score, {z_min:.1f}-{z_max:.1f})', alpha=0.9)
+        ax.scatter(normalized_z_thresholds, z_slide_counts, c='purple', s=30, alpha=0.6)
+
     # Mark expected slide count if provided
     if expected_slides:
         ax.axhline(y=expected_slides, color='g', linestyle='--', linewidth=2,
@@ -399,6 +502,20 @@ def plot_sweep(
                     ax.plot(opt_thresh_norm, pyscene_counts[idx_opt], '*',
                            color=colors_marker[idx % len(colors_marker)], markersize=15,
                            markeredgecolor='white', markeredgewidth=1.5, zorder=20)
+
+        # Z-score method optimal marker
+        if z_score_results:
+            z_thresholds, z_slide_counts = z_score_results
+            diffs_z = np.abs(z_slide_counts - expected_slides)
+            if diffs_z.min() <= 2:
+                idx_z = np.argmin(diffs_z)
+                z_min = z_thresholds.min()
+                z_max = z_thresholds.max()
+                opt_thresh_z_norm = (z_thresholds[idx_z] - z_min) / (z_max - z_min)
+                ax.plot(opt_thresh_z_norm, z_slide_counts[idx_z], '*',
+                       color='purple', markersize=15,
+                       markeredgecolor='white', markeredgewidth=1.5, zorder=20,
+                       label=f'z-score optimal')
 
     ax.set_xlabel('Normalized Threshold (log scale)', fontsize=12)
     ax.set_ylabel('Number of Slides (log scale)', fontsize=12)
@@ -565,6 +682,18 @@ def main():
         # Print text summary for slidegeist
         print_text_summary(thresholds, slide_counts, expected_slides)
 
+        # Compute z-scores and sweep z-thresholds
+        print("\nComputing rolling window z-scores...")
+        z_scores = compute_z_scores(frame_diffs, window_seconds=7.0, working_fps=working_fps)
+        z_thresholds, z_slide_counts = sweep_z_thresholds(
+            frame_diffs,
+            z_scores,
+            working_fps,
+            z_threshold_range=(2.0, 5.0),
+            z_threshold_step=0.1
+        )
+        print(f"Z-score sweep complete: {len(z_thresholds)} thresholds tested")
+
         # Optionally run PySceneDetect comparison
         pyscene_results = []
         if args.compare_pyscenedetect:
@@ -598,7 +727,8 @@ def main():
                 slide_counts,
                 expected_slides,
                 video_name,
-                pyscene_results if pyscene_results else None
+                pyscene_results if pyscene_results else None,
+                z_score_results=(z_thresholds, z_slide_counts)
             )
         else:
             print("\nInstall matplotlib to see plot: pip install matplotlib")
