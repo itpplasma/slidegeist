@@ -14,6 +14,7 @@ from slidegeist.constants import (
 )
 from slidegeist.export import export_slides_json
 from slidegeist.ffmpeg import detect_scenes
+from slidegeist.ocr import OcrPipeline, build_default_ocr_pipeline
 from slidegeist.slides import extract_slides
 from slidegeist.transcribe import transcribe_video
 
@@ -30,7 +31,8 @@ def process_video(
     device: str = DEFAULT_DEVICE,
     image_format: str = DEFAULT_IMAGE_FORMAT,
     skip_slides: bool = False,
-    skip_transcription: bool = False
+    skip_transcription: bool = False,
+    ocr_pipeline: OcrPipeline | None = None,
 ) -> dict[str, Path | list[Path]]:
     """Process a video and return generated artifacts.
 
@@ -113,12 +115,15 @@ def process_video(
         logger.info("=" * 60)
 
         json_path = output_dir / "slides.json"
+        if ocr_pipeline is None:
+            ocr_pipeline = build_default_ocr_pipeline()
         export_slides_json(
             video_path,
             slide_metadata,
             transcript_segments,
             json_path,
-            model
+            model,
+            ocr_pipeline=ocr_pipeline,
         )
         results['slides_json'] = json_path
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import json
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,28 @@ from slidegeist.pipeline import process_video
 
 def test_process_video_produces_slides_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure process_video writes slides.json and returns paths."""
+
+    class _IntegrationOcrStub:
+        def process(self, image_path: Path, transcript_full_text: str, transcript_segments: list[dict[str, Any]]) -> dict[str, Any]:
+            return {
+                "engine": {
+                    "primary": "stub",
+                    "primary_version": "1.0",
+                    "refiner": "stub",
+                    "refiner_version": "1.0",
+                },
+                "raw_text": "raw",
+                "final_text": "refined",
+                "blocks": [],
+                "visual_elements": ["box"],
+                "model_response": "{\"text\":\"refined\"}",
+            }
+
+    monkeypatch.setattr(
+        "slidegeist.pipeline.build_default_ocr_pipeline",
+        lambda: _IntegrationOcrStub(),
+    )
+
     def fake_detect_scenes(*_: Any, **__: Any) -> list[float]:
         return [2.0]
 
@@ -67,10 +90,16 @@ def test_process_video_produces_slides_json(tmp_path: Path, monkeypatch: pytest.
     assert isinstance(json_path, Path)
     assert json_path.exists()
 
-    data = json_path.read_text()
-    assert '"slides"' in data
-    assert '"slide_number": 0' in data
-    assert '"Hello"' in data
+    manifest = json.loads(json_path.read_text())
+    assert len(manifest["slides"]) == 2
+    first_entry = manifest["slides"][0]
+    assert first_entry["time_start"] == 0.0
+    per_slide_path = json_path.parent / first_entry["json_path"]
+    assert per_slide_path.exists()
+
+    slide_payload = json.loads(per_slide_path.read_text())
+    assert slide_payload["transcript"]["full_text"] == "Hello"
+    assert slide_payload["ocr"]["visual_elements"] == ["box"]
 
 
 def test_cli_process_default_invocation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
