@@ -1,23 +1,43 @@
-"""Tests for JSON export functionality."""
+"""Tests for Markdown export functionality."""
 
-import json
 from pathlib import Path
+from typing import Any, Dict, List
+
+import cv2
+import numpy as np
 
 from slidegeist.export import export_slides_json
+from slidegeist.ocr import build_default_ocr_pipeline
 from slidegeist.transcribe import Segment
 
 
-def test_export_slides_json_basic(tmp_path: Path) -> None:
-    """Test basic slides.json export."""
+def _make_image(path: Path, color: int) -> None:
+    """Create a simple solid color test image."""
+    matrix = np.full((10, 20, 3), color, dtype=np.uint8)
+    cv2.imwrite(str(path), matrix)
+
+
+def _make_text_image(path: Path, text: str) -> None:
+    """Create an image with readable text for OCR testing."""
+    # Create white background
+    img = np.full((100, 400, 3), 255, dtype=np.uint8)
+
+    # Add black text
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(img, text, (10, 50), font, 1.0, (0, 0, 0), 2, cv2.LINE_AA)
+
+    cv2.imwrite(str(path), img)
+
+
+def test_export_slides_manifest_and_payloads(tmp_path: Path) -> None:
     video_path = Path("/fake/video.mp4")
 
-    # Create fake image files
     slides_dir = tmp_path / "slides"
     slides_dir.mkdir()
     img1 = slides_dir / "slide_001.jpg"
     img2 = slides_dir / "slide_002.jpg"
-    img1.touch()
-    img2.touch()
+    _make_text_image(img1, "QUANTUM PHYSICS")
+    _make_text_image(img2, "NEWTON LAWS")
 
     slide_metadata = [
         (1, 0.0, 10.0, img1),
@@ -31,48 +51,53 @@ def test_export_slides_json_basic(tmp_path: Path) -> None:
         {"start": 15.0, "end": 20.0, "text": "And then Einstein.", "words": []},
     ]
 
-    output_file = tmp_path / "slides.json"
-    export_slides_json(video_path, slide_metadata, transcript_segments, output_file, "tiny")
+    output_file = tmp_path / "index.md"
+    ocr_pipeline = build_default_ocr_pipeline()
+
+    export_slides_json(
+        video_path,
+        slide_metadata,
+        transcript_segments,
+        output_file,
+        "tiny",
+        ocr_pipeline=ocr_pipeline,
+        split_slides=True,
+    )
 
     assert output_file.exists()
 
-    with output_file.open() as f:
-        data = json.load(f)
+    index_content = output_file.read_text()
+    assert "# Lecture Slides" in index_content
+    assert "video.mp4" in index_content
+    assert "tiny" in index_content
+    assert "Slide 1" in index_content
+    assert "Slide 2" in index_content
 
-    # Check metadata
-    assert data["metadata"]["video_file"] == "video.mp4"
-    assert data["metadata"]["duration_seconds"] == 20
-    assert data["metadata"]["model"] == "tiny"
-    assert "processed_at" in data["metadata"]
+    # Check per-slide markdown (in output root, not slides/)
+    slide1_md = tmp_path / "slide_001.md"
+    assert slide1_md.exists()
+    slide1_content = slide1_md.read_text()
+    assert "---" in slide1_content
+    assert "id: slide_001" in slide1_content
+    assert "index: 1" in slide1_content
+    assert "time_start: 0.0" in slide1_content
+    assert "time_end: 10.0" in slide1_content
+    assert "# Slide 1" in slide1_content
+    assert "Welcome to the lecture." in slide1_content
 
-    # Check slides
-    assert len(data["slides"]) == 2
-
-    # First slide
-    assert data["slides"][0]["slide_number"] == 1
-    assert data["slides"][0]["time_start"] == 0
-    assert data["slides"][0]["time_end"] == 10
-    assert data["slides"][0]["image_path"] == "slides/slide_001.jpg"
-    assert "Welcome to the lecture." in data["slides"][0]["transcript"]
-    assert "Today we discuss physics." in data["slides"][0]["transcript"]
-
-    # Second slide
-    assert data["slides"][1]["slide_number"] == 2
-    assert data["slides"][1]["time_start"] == 10
-    assert data["slides"][1]["time_end"] == 20
-    assert data["slides"][1]["image_path"] == "slides/slide_002.jpg"
-    assert "Let's start with Newton." in data["slides"][1]["transcript"]
-    assert "And then Einstein." in data["slides"][1]["transcript"]
+    # Check OCR content (if Tesseract available, should have content)
+    if ocr_pipeline._primary is not None and ocr_pipeline._primary.is_available:
+        assert "## Slide Content" in slide1_content
+        # Should extract some text from the image
+        assert "QUANTUM" in slide1_content or "quantum" in slide1_content.lower()
 
 
-def test_export_slides_json_empty_transcript(tmp_path: Path) -> None:
-    """Test export with slide that has no transcript."""
+def test_export_slides_handles_empty_transcript(tmp_path: Path) -> None:
     video_path = Path("/fake/video.mp4")
-
     slides_dir = tmp_path / "slides"
     slides_dir.mkdir()
     img1 = slides_dir / "slide_001.jpg"
-    img1.touch()
+    _make_text_image(img1, "SUMMARY")
 
     slide_metadata = [
         (1, 0.0, 10.0, img1),
@@ -80,59 +105,53 @@ def test_export_slides_json_empty_transcript(tmp_path: Path) -> None:
 
     transcript_segments: list[Segment] = []
 
-    output_file = tmp_path / "slides.json"
-    export_slides_json(video_path, slide_metadata, transcript_segments, output_file, "base")
+    output_file = tmp_path / "index.md"
+    ocr_pipeline = build_default_ocr_pipeline()
 
-    assert output_file.exists()
+    export_slides_json(
+        video_path,
+        slide_metadata,
+        transcript_segments,
+        output_file,
+        "base",
+        ocr_pipeline=ocr_pipeline,
+        split_slides=True,
+    )
 
-    with output_file.open() as f:
-        data = json.load(f)
+    slide1_md = tmp_path / "slide_001.md"
+    assert slide1_md.exists()
+    content = slide1_md.read_text()
 
-    assert len(data["slides"]) == 1
-    assert data["slides"][0]["transcript"] == ""
+    # With empty transcript, no transcript section
+    assert "## Transcript" not in content
 
-
-def test_export_slides_json_whitespace_text(tmp_path: Path) -> None:
-    """Test export filters out whitespace-only transcript text."""
-    video_path = Path("/fake/video.mp4")
-
-    slides_dir = tmp_path / "slides"
-    slides_dir.mkdir()
-    img1 = slides_dir / "slide_001.jpg"
-    img1.touch()
-
-    slide_metadata = [
-        (1, 0.0, 10.0, img1),
-    ]
-
-    transcript_segments: list[Segment] = [
-        {"start": 0.0, "end": 5.0, "text": "   ", "words": []},
-        {"start": 5.0, "end": 10.0, "text": "Valid text.", "words": []},
-    ]
-
-    output_file = tmp_path / "slides.json"
-    export_slides_json(video_path, slide_metadata, transcript_segments, output_file, "tiny")
-
-    with output_file.open() as f:
-        data = json.load(f)
-
-    # Should only include "Valid text." not the whitespace
-    assert data["slides"][0]["transcript"] == "Valid text."
+    # Should still have OCR content if Tesseract available
+    if ocr_pipeline._primary is not None and ocr_pipeline._primary.is_available:
+        assert "## Slide Content" in content
 
 
-def test_export_slides_json_empty_metadata(tmp_path: Path) -> None:
-    """Test export with no slides."""
+def test_export_slides_empty_metadata(tmp_path: Path) -> None:
     video_path = Path("/fake/video.mp4")
     slide_metadata: list[tuple[int, float, float, Path]] = []
     transcript_segments: list[Segment] = []
 
-    output_file = tmp_path / "slides.json"
-    export_slides_json(video_path, slide_metadata, transcript_segments, output_file, "tiny")
+    output_file = tmp_path / "index.md"
+    ocr_pipeline = build_default_ocr_pipeline()
+
+    export_slides_json(
+        video_path,
+        slide_metadata,
+        transcript_segments,
+        output_file,
+        "tiny",
+        ocr_pipeline=ocr_pipeline,
+        split_slides=True,
+    )
 
     assert output_file.exists()
-
-    with output_file.open() as f:
-        data = json.load(f)
-
-    assert data["metadata"]["duration_seconds"] == 0
-    assert len(data["slides"]) == 0
+    content = output_file.read_text()
+    assert "# Lecture Slides" in content
+    assert "video.mp4" in content
+    # No slide markdown files in root (split mode with no slides)
+    md_files = list(tmp_path.glob("slide_*.md"))
+    assert len(md_files) == 0

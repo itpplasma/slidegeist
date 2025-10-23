@@ -29,10 +29,15 @@ dependencies = [
     "numpy>=1.24.0",
     "opencv-python>=4.8.0",
     "yt-dlp>=2024.0.0",
+    "pytesseract>=0.3.10",
+    "Pillow>=10.0.0",
 ]
 
 [project.optional-dependencies]
-mlx = ["mlx-whisper>=0.1.0"]
+mlx = [
+    "mlx-whisper>=0.1.0",
+    "mlx-vlm>=0.3.4",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",

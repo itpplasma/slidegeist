@@ -13,15 +13,15 @@ def test_check_ffmpeg_available():
 
 
 def test_format_slide_filename():
-    """Test slide filename formatting with HH:MM:SS timestamps."""
-    # Test basic formatting
-    assert format_slide_filename(0, 100, 0.0, 125.3) == "slide_000_00:00:00-00:02:05"
-    assert format_slide_filename(42, 100, 125.3, 287.6) == "slide_042_00:02:05-00:04:47"
+    """Test slide filename formatting with 1-based numbering."""
+    # Test basic formatting (1-based)
+    assert format_slide_filename(1, 100) == "slide_001"
+    assert format_slide_filename(42, 100) == "slide_042"
 
     # Test padding based on total slides
-    assert format_slide_filename(0, 10, 0.0, 10.0) == "slide_000_00:00:00-00:00:10"
-    assert format_slide_filename(0, 1000, 0.0, 10.0) == "slide_000_00:00:00-00:00:10"  # max(3, len("999")) = 3
-    assert format_slide_filename(999, 1000, 0.0, 10.0) == "slide_999_00:00:00-00:00:10"
+    assert format_slide_filename(1, 10) == "slide_001"
+    assert format_slide_filename(1, 1000) == "slide_0001"
+    assert format_slide_filename(1000, 1000) == "slide_1000"
 
 
 def test_format_timestamp_hhmmss():

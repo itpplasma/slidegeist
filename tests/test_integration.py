@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import json
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,33 @@ from slidegeist.pipeline import process_video
 
 def test_process_video_produces_slides_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure process_video writes slides.json and returns paths."""
+
+    class _IntegrationOcrStub:
+        class _PrimaryStub:
+            is_available = True
+
+        _primary = _PrimaryStub()
+
+        def process(self, image_path: Path, transcript_full_text: str, transcript_segments: list[dict[str, Any]]) -> dict[str, Any]:
+            return {
+                "engine": {
+                    "primary": "stub",
+                    "primary_version": "1.0",
+                    "refiner": "stub",
+                    "refiner_version": "1.0",
+                },
+                "raw_text": "raw",
+                "final_text": "refined",
+                "blocks": [],
+                "visual_elements": ["box"],
+                "model_response": "{\"text\":\"refined\"}",
+            }
+
+    monkeypatch.setattr(
+        "slidegeist.pipeline.build_default_ocr_pipeline",
+        lambda: _IntegrationOcrStub(),
+    )
+
     def fake_detect_scenes(*_: Any, **__: Any) -> list[float]:
         return [2.0]
 
@@ -23,11 +51,12 @@ def test_process_video_produces_slides_json(tmp_path: Path, monkeypatch: pytest.
         output_dir: Path,
         image_format: str
     ) -> list[tuple[int, float, float, Path]]:
-        output_dir.mkdir(parents=True, exist_ok=True)
+        slides_dir = output_dir / "slides"
+        slides_dir.mkdir(parents=True, exist_ok=True)
         paths: list[tuple[int, float, float, Path]] = []
-        for index, start in enumerate([0.0, 2.0]):
+        for index, start in enumerate([0.0, 2.0], start=1):  # 1-based numbering
             end = start + 2.0
-            slide_path = output_dir / f"slide_{index:03d}.{image_format}"
+            slide_path = slides_dir / f"slide_{index:03d}.{image_format}"
             slide_path.write_bytes(b"fake image")
             paths.append((index, start, end, slide_path))
         return paths
@@ -63,14 +92,25 @@ def test_process_video_produces_slides_json(tmp_path: Path, monkeypatch: pytest.
     assert isinstance(slides, list)
     assert len(slides) == 2
 
-    json_path = result.get("slides_json")
-    assert isinstance(json_path, Path)
-    assert json_path.exists()
+    # Check slides markdown exists (default: slides.md combined file)
+    slides_md = result.get("slides_md")
+    assert isinstance(slides_md, Path)
+    assert slides_md.exists()
+    slides_content = slides_md.read_text()
+    assert "# Lecture Slides" in slides_content
 
-    data = json_path.read_text()
-    assert '"slides"' in data
-    assert '"slide_number": 0' in data
-    assert '"Hello"' in data
+    # Check combined markdown file contains slides (default mode, no --split)
+    output_dir = result.get("output_dir")
+    assert isinstance(output_dir, Path)
+
+    # Default mode: single slides.md file with 1-based numbering
+    assert "## Slide 1" in slides_content
+    assert "Hello" in slides_content
+    assert "refined" in slides_content  # OCR content
+
+    # Should not have separate slide files in default mode
+    slide_001_md = output_dir / "slide_001.md"
+    assert not slide_001_md.exists()
 
 
 def test_cli_process_default_invocation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -78,22 +118,21 @@ def test_cli_process_default_invocation(monkeypatch: pytest.MonkeyPatch, tmp_pat
     output_dir = tmp_path / "cli-out"
 
     def fake_process_video(*_: Any, **__: Any) -> dict[str, Any]:
-        json_path = output_dir / "slides.json"
+        slides_md = output_dir / "slides.md"
         output_dir.mkdir(parents=True, exist_ok=True)
-        json_path.write_text('{"slides": []}')
+        slides_md.write_text('# Lecture Slides')
         return {
             "output_dir": output_dir,
             "slides": [],
-            "slides_json": json_path,
+            "slides_md": slides_md,
         }
 
     monkeypatch.setattr("slidegeist.cli.process_video", fake_process_video)
     monkeypatch.setattr("slidegeist.cli.check_prerequisites", lambda: None)
-    monkeypatch.setattr("slidegeist.cli.resolve_video_path", lambda value, cookies_from_browser=None: Path(value))
+    monkeypatch.setattr("slidegeist.cli.resolve_video_path", lambda input_str, output_dir, cookies_from_browser=None: Path(input_str))
     monkeypatch.setattr(sys, "argv", ["slidegeist", str(tmp_path / "input.mp4")])
 
     cli.main()
 
     captured = capsys.readouterr()
     assert "Processing complete" in captured.out
-    assert "slides.json" in captured.out

@@ -15,7 +15,7 @@ from slidegeist.constants import (
     DEFAULT_START_OFFSET,
     DEFAULT_WHISPER_MODEL,
 )
-from slidegeist.download import BrowserType, download_video, is_url
+from slidegeist.download import BrowserType, download_video, get_video_filename, is_url
 from slidegeist.ffmpeg import check_ffmpeg_available
 from slidegeist.pipeline import process_slides_only, process_video
 
@@ -23,12 +23,15 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_video_path(
-    input_str: str, cookies_from_browser: BrowserType | None = None
+    input_str: str,
+    output_dir: Path,
+    cookies_from_browser: BrowserType | None = None
 ) -> Path:
     """Resolve input to video path, downloading if URL.
 
     Args:
         input_str: Video file path or URL.
+        output_dir: Output directory to store downloaded video.
         cookies_from_browser: Browser to extract cookies from for authenticated downloads.
 
     Returns:
@@ -36,7 +39,7 @@ def resolve_video_path(
     """
     if is_url(input_str):
         logger.info(f"Detected URL input: {input_str}")
-        return download_video(input_str, cookies_from_browser=cookies_from_browser)
+        return download_video(input_str, output_dir=output_dir, cookies_from_browser=cookies_from_browser)
     return Path(input_str)
 
 
@@ -107,19 +110,35 @@ def handle_process(args: argparse.Namespace) -> None:
         check_prerequisites()
         validate_scene_threshold(args.scene_threshold)
 
+        # Determine output directory early (before download)
+        output_dir = args.out
+        if output_dir == Path(DEFAULT_OUTPUT_DIR):
+            # Need to determine from input
+            if is_url(args.input):
+                # For URLs, get video filename before downloading
+                video_filename = get_video_filename(args.input, getattr(args, 'cookies_from_browser', None))
+                output_dir = Path.cwd() / video_filename
+            else:
+                # For local files, use video filename immediately
+                output_dir = Path.cwd() / Path(args.input).stem
+
         video_path = resolve_video_path(
-            args.input, getattr(args, 'cookies_from_browser', None)
+            args.input, output_dir, getattr(args, 'cookies_from_browser', None)
         )
+
+        source_url = args.input if args.input.startswith(('http://', 'https://')) else None
 
         result = process_video(
             video_path=video_path,
-            output_dir=args.out,
+            output_dir=output_dir,
             scene_threshold=args.scene_threshold,
             min_scene_len=args.min_scene_len,
             start_offset=args.start_offset,
             model=args.model,
+            source_url=source_url,
             device=args.device,
-            image_format=getattr(args, 'format', DEFAULT_IMAGE_FORMAT)
+            image_format=getattr(args, 'format', DEFAULT_IMAGE_FORMAT),
+            split_slides=getattr(args, 'split', False)
         )
 
         print("\n" + "=" * 60)
@@ -127,8 +146,8 @@ def handle_process(args: argparse.Namespace) -> None:
         print("=" * 60)
         if 'slides' in result:
             print(f"  Slides:      {len(result['slides'])} images")  # type: ignore
-        if 'slides_json' in result:
-            print(f"  slides.json: {result['slides_json']}")
+        if 'slides_md' in result:
+            print(f"  Markdown:    {result['slides_md']}")
         print(f"  Output dir:  {result['output_dir']}")
         print("=" * 60)
 
@@ -149,13 +168,23 @@ def handle_slides(args: argparse.Namespace) -> None:
         check_prerequisites()
         validate_scene_threshold(args.scene_threshold)
 
+        # Determine output directory early (before download)
+        output_dir = args.out
+        if output_dir == Path(DEFAULT_OUTPUT_DIR):
+            if is_url(args.input):
+                # For URLs, get video filename before downloading
+                video_filename = get_video_filename(args.input, getattr(args, 'cookies_from_browser', None))
+                output_dir = Path.cwd() / video_filename
+            else:
+                output_dir = Path.cwd() / Path(args.input).stem
+
         video_path = resolve_video_path(
-            args.input, getattr(args, 'cookies_from_browser', None)
+            args.input, output_dir, getattr(args, 'cookies_from_browser', None)
         )
 
         result = process_slides_only(
             video_path=video_path,
-            output_dir=args.out,
+            output_dir=output_dir,
             scene_threshold=args.scene_threshold,
             min_scene_len=args.min_scene_len,
             start_offset=args.start_offset,
@@ -210,7 +239,14 @@ Examples:
     )
 
     # Create parent parsers for common arguments (for subcommands)
-    common_parent = argparse.ArgumentParser(add_help=False)
+    verbose_parent = argparse.ArgumentParser(add_help=False)
+    verbose_parent.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Enable verbose logging"
+    )
+
+    common_parent = argparse.ArgumentParser(add_help=False, parents=[verbose_parent])
     common_parent.add_argument(
         "input",
         type=str,
@@ -276,6 +312,11 @@ Examples:
         default=DEFAULT_DEVICE,
         choices=["cpu", "cuda", "auto"],
         help=f"Processing device (default: {DEFAULT_DEVICE} - uses MLX on Apple Silicon if available)"
+    )
+    process_parser.add_argument(
+        "--split",
+        action="store_true",
+        help="Create separate markdown files (index.md + slide_NNN.md) instead of single slides.md"
     )
 
     # Slides command

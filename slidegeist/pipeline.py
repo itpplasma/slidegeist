@@ -14,6 +14,7 @@ from slidegeist.constants import (
 )
 from slidegeist.export import export_slides_json
 from slidegeist.ffmpeg import detect_scenes
+from slidegeist.ocr import OcrPipeline, build_default_ocr_pipeline
 from slidegeist.slides import extract_slides
 from slidegeist.transcribe import transcribe_video
 
@@ -27,10 +28,13 @@ def process_video(
     min_scene_len: float = DEFAULT_MIN_SCENE_LEN,
     start_offset: float = DEFAULT_START_OFFSET,
     model: str = DEFAULT_WHISPER_MODEL,
+    source_url: str | None = None,
     device: str = DEFAULT_DEVICE,
     image_format: str = DEFAULT_IMAGE_FORMAT,
     skip_slides: bool = False,
-    skip_transcription: bool = False
+    skip_transcription: bool = False,
+    split_slides: bool = False,
+    ocr_pipeline: OcrPipeline | None = None,
 ) -> dict[str, Path | list[Path]]:
     """Process a video and return generated artifacts.
 
@@ -106,21 +110,26 @@ def process_video(
         )
         transcript_segments = transcript_data['segments']
 
-    # Step 4: Export slides.json (requires both slides and transcription)
+    # Step 4: Export slides markdown (requires both slides and transcription)
     if not skip_slides and not skip_transcription:
         logger.info("=" * 60)
-        logger.info("STEP 4: Export slides.json")
+        logger.info("STEP 4: Export slides markdown")
         logger.info("=" * 60)
 
-        json_path = output_dir / "slides.json"
+        markdown_path = output_dir / ("index.md" if split_slides else "slides.md")
+        if ocr_pipeline is None:
+            ocr_pipeline = build_default_ocr_pipeline()
         export_slides_json(
             video_path,
             slide_metadata,
             transcript_segments,
-            json_path,
-            model
+            markdown_path,
+            model,
+            ocr_pipeline=ocr_pipeline,
+            source_url=source_url,
+            split_slides=split_slides,
         )
-        results['slides_json'] = json_path
+        results['slides_md'] = markdown_path
 
     # Summary
     logger.info("=" * 60)
