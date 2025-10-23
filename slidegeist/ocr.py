@@ -148,8 +148,11 @@ class TesseractExtractor:
 
         from pytesseract import Output  # type: ignore[attr-defined]
 
+        # Use both English and German for multilingual support
+        # PSM 6 = Assume a single uniform block of text
         data = pytesseract.image_to_data(
             str(image_path),
+            lang='eng+deu',
             output_type=Output.DICT,
             config="--psm 6",
         )
