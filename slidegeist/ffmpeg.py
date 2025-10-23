@@ -75,8 +75,7 @@ def detect_scenes(
     Args:
         video_path: Path to the video file.
         threshold: Scene detection threshold (0-1 scale, normalized pixel difference).
-                  Lower = more sensitive. Default 0.03 from research.
-                  Typical range: 0.02-0.05 for presentations.
+                  Lower = more sensitive. Typical range: 0.02-0.20 for presentations.
         min_scene_len: Minimum scene length in seconds (filters rapid clicks).
         start_offset: Skip first N seconds to avoid mouse movement during setup.
 
@@ -93,14 +92,11 @@ def detect_scenes(
     # Research: Best performance for lecture videos (high recall and precision)
     from slidegeist.pixel_diff_detector import detect_slides_pixel_diff
 
-    # Convert threshold from 0-100 scale to 0-1 scale
-    normalized_threshold = threshold / 1000.0 if threshold > 1.0 else threshold
-
     return detect_slides_pixel_diff(
         video_path,
         start_offset=start_offset,
         min_scene_len=min_scene_len,
-        threshold=normalized_threshold
+        threshold=threshold
     )
 
 

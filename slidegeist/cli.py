@@ -17,7 +17,7 @@ from slidegeist.constants import (
 )
 from slidegeist.download import BrowserType, download_video, is_url
 from slidegeist.ffmpeg import check_ffmpeg_available
-from slidegeist.pipeline import process_slides_only, process_transcript_only, process_video
+from slidegeist.pipeline import process_slides_only, process_video
 
 logger = logging.getLogger(__name__)
 
@@ -172,35 +172,6 @@ def handle_slides(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
-def handle_transcribe(args: argparse.Namespace) -> None:
-    """Handle 'slidegeist transcribe' command."""
-    try:
-        display_legal_notice()
-        check_prerequisites()
-
-        video_path = resolve_video_path(
-            args.input, getattr(args, 'cookies_from_browser', None)
-        )
-
-        result = process_transcript_only(
-            video_path=video_path,
-            output_dir=args.out,
-            model=args.model,
-            device=args.device
-        )
-
-        print("\n✓ Transcription complete")
-        if 'transcript' in result:
-            print(f"  Transcript:  {result['transcript']}")
-        print(f"  Output dir:  {result['output_dir']}")
-
-    except Exception as e:
-        logger.error(f"Transcription failed: {e}")
-        if args.verbose:
-            logger.exception("Full traceback:")
-        sys.exit(1)
-
-
 def main() -> None:
     """Main entry point for the CLI."""
     parser = argparse.ArgumentParser(
@@ -220,9 +191,6 @@ Examples:
 
   # Extract only slides (no transcription)
   slidegeist slides lecture.mp4
-
-  # Extract only transcript (no slides)
-  slidegeist transcribe lecture.mp4
 
   # Explicit process command (same as default)
   slidegeist process lecture.mp4
@@ -289,27 +257,25 @@ Examples:
         help=f"Slide image format (default: {DEFAULT_IMAGE_FORMAT})"
     )
 
-    transcribe_parent = argparse.ArgumentParser(add_help=False)
-    transcribe_parent.add_argument(
-        "--model",
-        default=DEFAULT_WHISPER_MODEL,
-        choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"],
-        help=f"Whisper model size (default: {DEFAULT_WHISPER_MODEL})"
-    )
-    transcribe_parent.add_argument(
-        "--device",
-        default=DEFAULT_DEVICE,
-        choices=["cpu", "cuda", "auto"],
-        help=f"Processing device (default: {DEFAULT_DEVICE} - uses MLX on Apple Silicon if available)"
-    )
-
     subparsers = parser.add_subparsers(dest="command", required=False)
 
     # Process command (full pipeline)
     process_parser = subparsers.add_parser(
         "process",
-        parents=[common_parent, slides_parent, transcribe_parent],
+        parents=[common_parent, slides_parent],
         help="Process video (extract slides and transcript)"
+    )
+    process_parser.add_argument(
+        "--model",
+        default=DEFAULT_WHISPER_MODEL,
+        choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"],
+        help=f"Whisper model size (default: {DEFAULT_WHISPER_MODEL})"
+    )
+    process_parser.add_argument(
+        "--device",
+        default=DEFAULT_DEVICE,
+        choices=["cpu", "cuda", "auto"],
+        help=f"Processing device (default: {DEFAULT_DEVICE} - uses MLX on Apple Silicon if available)"
     )
 
     # Slides command
@@ -319,13 +285,6 @@ Examples:
         help="Extract only slides (no transcription)"
     )
 
-    # Transcribe command
-    transcribe_parser = subparsers.add_parser(
-        "transcribe",
-        parents=[common_parent, transcribe_parent],
-        help="Extract only transcript (no slides)"
-    )
-
     # Parse arguments with special handling for default mode
     # Check if first positional arg is a subcommand or a video input
     import sys as sys_module
@@ -333,7 +292,7 @@ Examples:
 
     # If first arg is not a known subcommand and looks like input, inject 'process'
     if argv and argv[0] not in ['-h', '--help', '--version', '-v', '--verbose'] and \
-       argv[0] not in ['process', 'slides', 'transcribe'] and \
+       argv[0] not in ['process', 'slides'] and \
        not argv[0].startswith('-'):
         # First positional arg is likely video input, default to process mode
         argv = ['process'] + argv
@@ -354,8 +313,6 @@ Examples:
         handle_process(args)
     elif args.command == "slides":
         handle_slides(args)
-    elif args.command == "transcribe":
-        handle_transcribe(args)
 
 
 if __name__ == "__main__":

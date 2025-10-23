@@ -97,16 +97,13 @@ slidegeist process video.mp4
 ```bash
 # Extract only slides (no transcription)
 slidegeist slides video.mp4
-
-# Extract only transcript (no slides)
-slidegeist transcribe video.mp4
 ```
 
 ## CLI Options
 
 ```
 slidegeist <video> [options]
-slidegeist {process,slides,transcribe} <video> [options]
+slidegeist {process,slides} <video> [options]
 
 Options:
   --out DIR              Output directory (default: video filename)

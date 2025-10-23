@@ -105,8 +105,9 @@ def extract_slides(
             # This captures complete content before the next page flip
             extract_time = start_time + (segment_duration * 0.8)
 
-        # Clamp extract_time to video duration (avoid ffmpeg seeking beyond end)
-        extract_time = min(extract_time, duration - 0.1)
+        # Clamp extract_time within valid bounds (avoid negative seeks)
+        max_seek = max(duration - 0.1, 0.0)
+        extract_time = min(max(extract_time, 0.0), max_seek)
 
         # Create indexed filename with timestamps
         filename_base = format_slide_filename(i, total_slides, start_time, end_time)

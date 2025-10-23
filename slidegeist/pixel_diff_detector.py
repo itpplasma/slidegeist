@@ -64,6 +64,12 @@ def detect_slides_pixel_diff(
     fps = cap.get(cv2.CAP_PROP_FPS)
     cap.release()
 
+    if fps <= 0:
+        logger.warning(
+            "Input video reported non-positive FPS (%.3f). Falling back to 30 FPS.", fps
+        )
+        fps = 30.0
+
     logger.info(
         f"Detecting slides with Global Pixel Difference: start_offset={start_offset}s, "
         f"min_scene_len={min_scene_len}s, threshold={threshold}, "
@@ -137,8 +143,8 @@ def detect_slides_pixel_diff(
 
     # Calculate frame sampling parameters using working_fps
     start_frame = int(start_offset * working_fps)
-    frame_interval = int(sample_interval * working_fps)
-    min_frames_between = int(min_scene_len * working_fps)
+    frame_interval = max(1, int(round(sample_interval * working_fps)))
+    min_frames_between = max(1, int(round(min_scene_len * working_fps)))
     image_size = working_width * working_height
 
     timestamps = []
