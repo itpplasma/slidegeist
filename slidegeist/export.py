@@ -81,7 +81,7 @@ def export_slides_json(
         time_str = f"{_format_timestamp(t_start)}-{_format_timestamp(t_end)}"
         index_lines.append(
             f"{slide_index}. [Slide {slide_index}]({slide_id}.md) • "
-            f"![thumb](slides/{image_filename}) • {time_str}"
+            f"[![thumb](slides/{image_filename})]({slide_id}.md) • {time_str}"
         )
 
         logger.debug("Wrote slide %s (%d/%d)", per_slide_path, index + 1, total_slides)
@@ -182,7 +182,7 @@ def _build_slide_markdown(
         "",
         f"# Slide {slide_index}",
         "",
-        f"![Slide Image](slides/{image_filename})",
+        f"[![Slide Image](slides/{image_filename})](slides/{image_filename})",
         "",
     ]
 
