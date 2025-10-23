@@ -7,47 +7,26 @@ import cv2
 import numpy as np
 
 from slidegeist.export import export_slides_json
+from slidegeist.ocr import build_default_ocr_pipeline
 from slidegeist.transcribe import Segment
 
 
-class _StubPrimaryExtractor:
-    """Stub primary OCR extractor."""
-    @property
-    def is_available(self) -> bool:
-        return True
-
-
-class _StubOcrPipeline:
-    """Deterministic OCR output for testing."""
-
-    def __init__(self) -> None:
-        self._primary = _StubPrimaryExtractor()
-
-    def process(
-        self,
-        image_path: Path,
-        transcript_full_text: str,
-        transcript_segments: List[Dict[str, Any]],
-    ) -> Dict[str, Any]:
-        refined_text = f"refined {transcript_full_text.strip()}" if transcript_full_text else "refined"
-        return {
-            "engine": {
-                "primary": "stub",
-                "primary_version": "1.0",
-                "refiner": None,
-                "refiner_version": None,
-            },
-            "raw_text": "raw text",
-            "final_text": refined_text,
-            "blocks": [],
-            "visual_elements": ["arrow"],
-            "model_response": "{\"text\": \"stub\", \"visual_elements\": [\"arrow\"]}",
-        }
-
-
 def _make_image(path: Path, color: int) -> None:
+    """Create a simple solid color test image."""
     matrix = np.full((10, 20, 3), color, dtype=np.uint8)
     cv2.imwrite(str(path), matrix)
+
+
+def _make_text_image(path: Path, text: str) -> None:
+    """Create an image with readable text for OCR testing."""
+    # Create white background
+    img = np.full((100, 400, 3), 255, dtype=np.uint8)
+
+    # Add black text
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(img, text, (10, 50), font, 1.0, (0, 0, 0), 2, cv2.LINE_AA)
+
+    cv2.imwrite(str(path), img)
 
 
 def test_export_slides_manifest_and_payloads(tmp_path: Path) -> None:
@@ -57,8 +36,8 @@ def test_export_slides_manifest_and_payloads(tmp_path: Path) -> None:
     slides_dir.mkdir()
     img1 = slides_dir / "slide_001.jpg"
     img2 = slides_dir / "slide_002.jpg"
-    _make_image(img1, 128)
-    _make_image(img2, 64)
+    _make_text_image(img1, "QUANTUM PHYSICS")
+    _make_text_image(img2, "NEWTON LAWS")
 
     slide_metadata = [
         (1, 0.0, 10.0, img1),
@@ -73,7 +52,7 @@ def test_export_slides_manifest_and_payloads(tmp_path: Path) -> None:
     ]
 
     output_file = tmp_path / "index.md"
-    ocr_stub = _StubOcrPipeline()
+    ocr_pipeline = build_default_ocr_pipeline()
 
     export_slides_json(
         video_path,
@@ -81,7 +60,7 @@ def test_export_slides_manifest_and_payloads(tmp_path: Path) -> None:
         transcript_segments,
         output_file,
         "tiny",
-        ocr_pipeline=ocr_stub,
+        ocr_pipeline=ocr_pipeline,
     )
 
     assert output_file.exists()
@@ -104,8 +83,12 @@ def test_export_slides_manifest_and_payloads(tmp_path: Path) -> None:
     assert "time_end: 10.0" in slide1_content
     assert "# Slide 1" in slide1_content
     assert "Welcome to the lecture." in slide1_content
-    assert "refined" in slide1_content
-    assert "arrow" in slide1_content
+
+    # Check OCR content (if Tesseract available, should have content)
+    if ocr_pipeline._primary is not None and ocr_pipeline._primary.is_available:
+        assert "## Slide Content" in slide1_content
+        # Should extract some text from the image
+        assert "QUANTUM" in slide1_content or "quantum" in slide1_content.lower()
 
 
 def test_export_slides_handles_empty_transcript(tmp_path: Path) -> None:
@@ -113,7 +96,7 @@ def test_export_slides_handles_empty_transcript(tmp_path: Path) -> None:
     slides_dir = tmp_path / "slides"
     slides_dir.mkdir()
     img1 = slides_dir / "slide_001.jpg"
-    _make_image(img1, 255)
+    _make_text_image(img1, "SUMMARY")
 
     slide_metadata = [
         (1, 0.0, 10.0, img1),
@@ -122,6 +105,7 @@ def test_export_slides_handles_empty_transcript(tmp_path: Path) -> None:
     transcript_segments: list[Segment] = []
 
     output_file = tmp_path / "index.md"
+    ocr_pipeline = build_default_ocr_pipeline()
 
     export_slides_json(
         video_path,
@@ -129,7 +113,7 @@ def test_export_slides_handles_empty_transcript(tmp_path: Path) -> None:
         transcript_segments,
         output_file,
         "base",
-        ocr_pipeline=_StubOcrPipeline(),
+        ocr_pipeline=ocr_pipeline,
     )
 
     slide1_md = tmp_path / "slide_001.md"
@@ -137,9 +121,11 @@ def test_export_slides_handles_empty_transcript(tmp_path: Path) -> None:
     content = slide1_md.read_text()
 
     # With empty transcript, no transcript section
-    assert "## Transcript" not in content or content.count("## Transcript") == 0 or "## Transcript\n\n##" in content
-    assert "refined" in content
-    assert "arrow" in content
+    assert "## Transcript" not in content
+
+    # Should still have OCR content if Tesseract available
+    if ocr_pipeline._primary is not None and ocr_pipeline._primary.is_available:
+        assert "## Slide Content" in content
 
 
 def test_export_slides_empty_metadata(tmp_path: Path) -> None:
@@ -148,6 +134,7 @@ def test_export_slides_empty_metadata(tmp_path: Path) -> None:
     transcript_segments: list[Segment] = []
 
     output_file = tmp_path / "index.md"
+    ocr_pipeline = build_default_ocr_pipeline()
 
     export_slides_json(
         video_path,
@@ -155,7 +142,7 @@ def test_export_slides_empty_metadata(tmp_path: Path) -> None:
         transcript_segments,
         output_file,
         "tiny",
-        ocr_pipeline=_StubOcrPipeline(),
+        ocr_pipeline=ocr_pipeline,
     )
 
     assert output_file.exists()
