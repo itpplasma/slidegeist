@@ -214,8 +214,8 @@ def detect_slides_adaptive(
     video_path: Path,
     start_offset: float = 3.0,
     min_scene_len: float = 2.0,
-    threshold_range: tuple[float, float] = (0.01, 0.10),
-    threshold_steps: int = 10,
+    threshold_range: tuple[float, float] = (0.015, 0.05),
+    threshold_steps: int = 8,
     sample_interval: float = 1.0,
     max_resolution: int = 360,
     target_fps: float = 5.0,
@@ -223,14 +223,14 @@ def detect_slides_adaptive(
     """Detect slides using adaptive threshold selection.
 
     Computes pixel differences once, then sweeps over threshold range to find
-    optimal threshold that gives stable detection (flat region in sweep curve).
+    optimal threshold in flat region of detection curve (stable slide count).
 
     Args:
         video_path: Path to video file.
         start_offset: Skip first N seconds.
         min_scene_len: Minimum scene length in seconds.
         threshold_range: (min, max) threshold values to test.
-        threshold_steps: Number of thresholds to test.
+        threshold_steps: Number of thresholds to test in sweep.
         sample_interval: Time between compared frames.
         max_resolution: Max height for processing.
         target_fps: Target FPS for processing.
@@ -238,15 +238,211 @@ def detect_slides_adaptive(
     Returns:
         List of slide change timestamps using optimal threshold.
     """
-    # TODO: Implement full adaptive algorithm
-    # For now, use fixed threshold at middle of range
-    logger.info("Adaptive threshold detection (using default 0.02 for now)")
-    return detect_slides_pixel_diff(
-        video_path,
-        start_offset=start_offset,
-        min_scene_len=min_scene_len,
-        threshold=0.02,
-        sample_interval=sample_interval,
-        max_resolution=max_resolution,
-        target_fps=target_fps,
+    if not video_path.exists():
+        raise FileNotFoundError(f"Video file not found: {video_path}")
+
+    logger.info(
+        f"Adaptive slide detection: sweeping thresholds {threshold_range[0]:.3f}-{threshold_range[1]:.3f}"
     )
+
+    # Step 1: Preprocess video and compute ALL pixel differences once
+    # (same preprocessing logic as detect_slides_pixel_diff)
+    cap = cv2.VideoCapture(str(video_path))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    cap.release()
+
+    if fps <= 0:
+        fps = 30.0
+
+    # Preprocess if needed
+    working_video = video_path
+    temp_file = None
+    needs_processing = height > max_resolution or fps > target_fps
+    working_fps = fps
+
+    if needs_processing:
+        scale = max_resolution / height if height > max_resolution else 1.0
+        new_width = int(width * scale)
+        new_height = int(height * scale)
+        new_width = (new_width // 2) * 2
+        new_height = (new_height // 2) * 2
+
+        filters = []
+        if scale < 1.0:
+            filters.append(f'scale={new_width}:{new_height}')
+        if fps > target_fps:
+            fps_ratio = int(round(fps / target_fps))
+            actual_fps = fps / fps_ratio
+            filters.append(f'fps=fps={actual_fps}')
+            working_fps = actual_fps
+
+        filter_str = ','.join(filters)
+
+        temp_file = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False)
+        temp_file.close()
+
+        cmd = [
+            'ffmpeg', '-i', str(video_path),
+            '-vf', filter_str,
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+            '-y', temp_file.name
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError("Video preprocessing failed")
+
+        working_video = Path(temp_file.name)
+
+    # Process video and store all frame differences
+    cap = cv2.VideoCapture(str(working_video))
+    if not cap.isOpened():
+        raise RuntimeError(f"Failed to open video: {working_video}")
+
+    working_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    working_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    image_size = working_width * working_height
+
+    start_frame = int(start_offset * working_fps)
+    frame_interval = max(1, int(round(sample_interval * working_fps)))
+    min_frames_between = max(1, int(round(min_scene_len * working_fps)))
+
+    # Compute all differences (this is the expensive part - do once!)
+    frame_diffs = []  # List of (frame_num, normalized_diff)
+    prev_frame_binary = None
+    frame_num = start_frame
+
+    try:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+
+        while frame_num < total_frames:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            if (frame_num - start_frame) % frame_interval != 0:
+                frame_num += 1
+                continue
+
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            _, binary = cv2.threshold(gray, 0, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+            if prev_frame_binary is not None:
+                diff = np.abs(binary.astype(np.int16) - prev_frame_binary.astype(np.int16))
+                non_zero_count = np.count_nonzero(diff)
+                normalized_diff = non_zero_count / image_size
+                frame_diffs.append((frame_num, normalized_diff))
+
+            prev_frame_binary = binary
+            frame_num += 1
+
+    finally:
+        cap.release()
+        if temp_file is not None:
+            try:
+                os.unlink(temp_file.name)
+            except Exception:
+                pass
+
+    logger.info(f"Computed {len(frame_diffs)} frame differences")
+
+    # Step 2: Sweep thresholds and count slides for each
+    thresholds = np.linspace(threshold_range[0], threshold_range[1], threshold_steps)
+    slide_counts = []
+
+    for thresh in thresholds:
+        count = 0
+        last_change_frame = start_frame
+
+        for frame_num, diff_val in frame_diffs:
+            if diff_val >= thresh:
+                if frame_num - last_change_frame >= min_frames_between:
+                    count += 1
+                    last_change_frame = frame_num
+
+        slide_counts.append(count)
+        logger.debug(f"Threshold {thresh:.3f}: {count} slides")
+
+    # Step 3: Find flat region (stable slide count)
+    # Look for longest plateau in the curve
+    best_threshold_idx = _find_optimal_threshold_idx(slide_counts, thresholds)
+    optimal_threshold = thresholds[best_threshold_idx]
+    optimal_count = slide_counts[best_threshold_idx]
+
+    logger.info(
+        f"Adaptive threshold selected: {optimal_threshold:.3f} "
+        f"({optimal_count} slides detected)"
+    )
+
+    # Step 4: Apply optimal threshold to get final timestamps
+    timestamps = []
+    last_change_frame = start_frame
+
+    for frame_num, diff_val in frame_diffs:
+        if diff_val >= optimal_threshold:
+            if frame_num - last_change_frame >= min_frames_between:
+                timestamp = frame_num / working_fps
+                timestamps.append(timestamp)
+                last_change_frame = frame_num
+
+    return timestamps
+
+
+def _find_optimal_threshold_idx(slide_counts: list[int], thresholds: np.ndarray) -> int:
+    """Find optimal threshold index using flat region heuristic.
+
+    Strategy: Find stable plateau with reasonable slide count.
+    Prefer earlier thresholds (more sensitive) when plateaus have similar length.
+
+    Args:
+        slide_counts: Number of slides detected at each threshold.
+        thresholds: Threshold values tested.
+
+    Returns:
+        Index of optimal threshold.
+    """
+    if len(slide_counts) < 3:
+        # Not enough data points, prefer lowest threshold (most sensitive)
+        return 0
+
+    # Find all plateaus (consecutive indices with same or similar counts)
+    plateaus = []  # List of (start_idx, length, avg_count)
+    current_plateau_start = 0
+    current_plateau_len = 1
+
+    for i in range(1, len(slide_counts)):
+        # Consider counts within 1 of each other as same plateau
+        if abs(slide_counts[i] - slide_counts[i - 1]) <= 1:
+            current_plateau_len += 1
+        else:
+            # Save current plateau
+            avg_count = sum(slide_counts[current_plateau_start:current_plateau_start + current_plateau_len]) / current_plateau_len
+            plateaus.append((current_plateau_start, current_plateau_len, avg_count))
+            current_plateau_start = i
+            current_plateau_len = 1
+
+    # Add final plateau
+    avg_count = sum(slide_counts[current_plateau_start:current_plateau_start + current_plateau_len]) / current_plateau_len
+    plateaus.append((current_plateau_start, current_plateau_len, avg_count))
+
+    # Score plateaus: heavily prefer higher slide counts (avoid under-detection)
+    # Score = slide_count^1.5 * length - prioritize slide count over stability
+    best_plateau = max(
+        plateaus,
+        key=lambda p: (p[2] ** 1.5) * p[1] if p[2] > 0 else 0
+    )
+
+    best_start, best_len, best_avg = best_plateau
+
+    # Return middle of best plateau
+    optimal_idx = best_start + best_len // 2
+
+    logger.debug(
+        f"Found {len(plateaus)} plateaus, selected plateau at indices "
+        f"{best_start}-{best_start + best_len - 1} (length={best_len}, avg_count={best_avg:.1f}), "
+        f"selecting index {optimal_idx} (threshold={thresholds[optimal_idx]:.3f})"
+    )
+
+    return optimal_idx

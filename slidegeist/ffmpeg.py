@@ -88,16 +88,27 @@ def detect_scenes(
     if not video_path.exists():
         raise FFmpegError(f"Video file not found: {video_path}")
 
-    # Use Global Pixel Difference method
+    # Use Global Pixel Difference method with adaptive threshold selection
     # Research: Best performance for lecture videos (high recall and precision)
-    from slidegeist.pixel_diff_detector import detect_slides_pixel_diff
+    from slidegeist.pixel_diff_detector import detect_slides_adaptive, detect_slides_pixel_diff
 
-    return detect_slides_pixel_diff(
-        video_path,
-        start_offset=start_offset,
-        min_scene_len=min_scene_len,
-        threshold=threshold
-    )
+    # Use adaptive detection by default (automatically finds optimal threshold)
+    # Falls back to fixed threshold if specified
+    if threshold == DEFAULT_SCENE_THRESHOLD:
+        # Use adaptive - no explicit threshold set by user
+        return detect_slides_adaptive(
+            video_path,
+            start_offset=start_offset,
+            min_scene_len=min_scene_len
+        )
+    else:
+        # User specified explicit threshold - honor it
+        return detect_slides_pixel_diff(
+            video_path,
+            start_offset=start_offset,
+            min_scene_len=min_scene_len,
+            threshold=threshold
+        )
 
 
 def extract_frame(
