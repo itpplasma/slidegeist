@@ -28,6 +28,7 @@ def process_video(
     min_scene_len: float = DEFAULT_MIN_SCENE_LEN,
     start_offset: float = DEFAULT_START_OFFSET,
     model: str = DEFAULT_WHISPER_MODEL,
+    source_url: str | None = None,
     device: str = DEFAULT_DEVICE,
     image_format: str = DEFAULT_IMAGE_FORMAT,
     skip_slides: bool = False,
@@ -108,24 +109,25 @@ def process_video(
         )
         transcript_segments = transcript_data['segments']
 
-    # Step 4: Export slides.json (requires both slides and transcription)
+    # Step 4: Export slides markdown (requires both slides and transcription)
     if not skip_slides and not skip_transcription:
         logger.info("=" * 60)
-        logger.info("STEP 4: Export slides.json")
+        logger.info("STEP 4: Export slides markdown")
         logger.info("=" * 60)
 
-        json_path = output_dir / "slides.json"
+        index_path = output_dir / "index.md"
         if ocr_pipeline is None:
             ocr_pipeline = build_default_ocr_pipeline()
         export_slides_json(
             video_path,
             slide_metadata,
             transcript_segments,
-            json_path,
+            index_path,
             model,
             ocr_pipeline=ocr_pipeline,
+            source_url=source_url,
         )
-        results['slides_json'] = json_path
+        results['index_md'] = index_path
 
     # Summary
     logger.info("=" * 60)

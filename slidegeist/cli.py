@@ -111,6 +111,8 @@ def handle_process(args: argparse.Namespace) -> None:
             args.input, getattr(args, 'cookies_from_browser', None)
         )
 
+        source_url = args.input if args.input.startswith(('http://', 'https://')) else None
+
         result = process_video(
             video_path=video_path,
             output_dir=args.out,
@@ -118,6 +120,7 @@ def handle_process(args: argparse.Namespace) -> None:
             min_scene_len=args.min_scene_len,
             start_offset=args.start_offset,
             model=args.model,
+            source_url=source_url,
             device=args.device,
             image_format=getattr(args, 'format', DEFAULT_IMAGE_FORMAT)
         )

@@ -1,8 +1,7 @@
-"""Export slide metadata to manifest plus per-slide payloads."""
+"""Export slide metadata to Markdown files."""
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,95 +22,108 @@ def export_slides_json(
     output_path: Path,
     model: str,
     ocr_pipeline: OcrPipeline | None = None,
+    source_url: str | None = None,
 ) -> None:
-    """Export slides manifest and per-slide JSON files with OCR/transcript payloads."""
+    """Export slides as Markdown files with an index."""
     output_dir = output_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    per_slide_dir = output_dir / "slides_meta"
-    per_slide_dir.mkdir(parents=True, exist_ok=True)
+    slides_dir = output_dir / "slides"
+    slides_dir.mkdir(parents=True, exist_ok=True)
 
     if ocr_pipeline is None:
         ocr_pipeline = build_default_ocr_pipeline()
 
-    logger.info("Creating slides manifest with %d slides", len(slide_metadata))
+    logger.info("Creating slides markdown with %d slides", len(slide_metadata))
 
-    manifest_slides: List[Dict[str, Any]] = []
+    index_lines: List[str] = []
     total_slides = len(slide_metadata)
 
     for index, (slide_index, t_start, t_end, image_path) in enumerate(slide_metadata):
         slide_id = image_path.stem or f"slide_{slide_index:03d}"
-        image_relative = image_path.relative_to(output_dir)
+        image_filename = image_path.name
 
-        transcript_payload, transcript_text = _collect_transcript_payload(
-            transcript_segments,
-            t_start,
-            t_end,
+        transcript_text = _collect_transcript_text(transcript_segments, t_start, t_end)
+
+        ocr_available = ocr_pipeline._primary is not None and ocr_pipeline._primary.is_available
+        if ocr_available:
+            try:
+                transcript_payload = _collect_transcript_payload(
+                    transcript_segments, t_start, t_end
+                )
+                ocr_payload = ocr_pipeline.process(
+                    image_path=image_path,
+                    transcript_full_text=transcript_text,
+                    transcript_segments=transcript_payload["segments"],
+                )
+                ocr_text = ocr_payload.get("final_text", "").strip()
+                visual_elements = ocr_payload.get("visual_elements", [])
+            except Exception as exc:
+                logger.warning("OCR failed for %s: %s", image_path, exc)
+                ocr_text = ""
+                visual_elements = []
+        else:
+            logger.warning("Tesseract not available, skipping OCR for %s", image_path)
+            ocr_text = ""
+            visual_elements = []
+
+        markdown_content = _build_slide_markdown(
+            slide_id=slide_id,
+            slide_index=slide_index,
+            t_start=t_start,
+            t_end=t_end,
+            image_filename=image_filename,
+            transcript_text=transcript_text,
+            ocr_text=ocr_text,
+            visual_elements=visual_elements,
         )
 
-        ocr_payload = ocr_pipeline.process(
-            image_path=image_path,
-            transcript_full_text=transcript_text,
-            transcript_segments=transcript_payload["segments"],
+        per_slide_path = slides_dir / f"{slide_id}.md"
+        per_slide_path.write_text(markdown_content, encoding="utf-8")
+
+        time_str = f"{_format_timestamp(t_start)}-{_format_timestamp(t_end)}"
+        index_lines.append(
+            f"{slide_index}. [Slide {slide_index}](slides/{slide_id}.md) • "
+            f"![thumb](slides/{image_filename}) • {time_str}"
         )
 
-        width_height = _read_image_size(image_path)
-        slide_json = {
-            "schema_version": "1.0",
-            "id": slide_id,
-            "index": slide_index,
-            "time": {
-                "start": t_start,
-                "end": t_end,
-            },
-            "image": {
-                "path": str(image_relative),
-                "width": width_height[0],
-                "height": width_height[1],
-            },
-            "transcript": transcript_payload,
-            "ocr": ocr_payload,
-        }
+        logger.debug("Wrote slide %s (%d/%d)", per_slide_path, index + 1, total_slides)
 
-        per_slide_path = per_slide_dir / f"{slide_id}.json"
-        with per_slide_path.open("w", encoding="utf-8") as handle:
-            json.dump(slide_json, handle, indent=2, ensure_ascii=False)
+    index_content = _build_index_markdown(
+        video_path=video_path,
+        source_url=source_url,
+        duration=slide_metadata[-1][2] if slide_metadata else 0.0,
+        model=model,
+        slide_lines=index_lines,
+    )
 
-        manifest_slides.append(
-            {
-                "id": slide_id,
-                "index": slide_index,
-                "json_path": str(per_slide_path.relative_to(output_dir)),
-                "image_path": str(image_relative),
-                "time_start": t_start,
-                "time_end": t_end,
-            }
-        )
+    output_path.write_text(index_content, encoding="utf-8")
+    logger.info("Exported slides index to %s", output_path)
 
-        logger.debug("Wrote slide payload %s (%d/%d)", per_slide_path, index + 1, total_slides)
 
-    manifest = {
-        "version": "1.0",
-        "metadata": {
-            "video_file": video_path.name,
-            "duration_seconds": slide_metadata[-1][2] if slide_metadata else 0.0,
-            "processed_at": datetime.now(timezone.utc).isoformat(),
-            "model": model,
-        },
-        "slides": manifest_slides,
-    }
-
-    with output_path.open("w", encoding="utf-8") as handle:
-        json.dump(manifest, handle, indent=2, ensure_ascii=False)
-
-    logger.info("Exported slide manifest to %s", output_path)
+def _collect_transcript_text(
+    transcript_segments: List[Segment],
+    start_time: float,
+    end_time: float,
+) -> str:
+    """Collect transcript text overlapping the slide interval."""
+    texts: List[str] = []
+    for segment in transcript_segments:
+        seg_start = segment["start"]
+        seg_end = segment["end"]
+        overlap = seg_start < end_time and seg_end > start_time
+        if overlap:
+            text = segment["text"].strip()
+            if text:
+                texts.append(text)
+    return " ".join(texts)
 
 
 def _collect_transcript_payload(
     transcript_segments: List[Segment],
     start_time: float,
     end_time: float,
-) -> tuple[Dict[str, Any], str]:
+) -> Dict[str, Any]:
     """Filter transcript segments to those overlapping the slide interval."""
     segments: List[Dict[str, Any]] = []
 
@@ -138,21 +150,98 @@ def _collect_transcript_payload(
 
     full_text = " ".join(item["text"] for item in segments)
 
-    payload = {
+    return {
         "full_text": full_text,
         "segments": segments,
     }
-    return payload, full_text
 
 
-def _read_image_size(image_path: Path) -> tuple[Optional[int], Optional[int]]:
-    """Return width/height for image; tolerate missing files."""
-    if not image_path.exists():
-        return (None, None)
+def _format_timestamp(seconds: float) -> str:
+    """Format seconds as MM:SS."""
+    mins = int(seconds // 60)
+    secs = int(seconds % 60)
+    return f"{mins:02d}:{secs:02d}"
 
-    image = cv2.imread(str(image_path))
-    if image is None:
-        return (None, None)
 
-    height, width = image.shape[:2]
-    return (int(width), int(height))
+def _build_slide_markdown(
+    slide_id: str,
+    slide_index: int,
+    t_start: float,
+    t_end: float,
+    image_filename: str,
+    transcript_text: str,
+    ocr_text: str,
+    visual_elements: List[str],
+) -> str:
+    """Build Markdown content for a single slide."""
+    lines = [
+        "---",
+        f"id: {slide_id}",
+        f"index: {slide_index}",
+        f"time_start: {t_start}",
+        f"time_end: {t_end}",
+        f"image: {image_filename}",
+        "---",
+        "",
+        f"# Slide {slide_index}",
+        "",
+        f"![Slide Image]({image_filename})",
+        "",
+    ]
+
+    if transcript_text:
+        lines.extend([
+            "## Transcript",
+            "",
+            transcript_text,
+            "",
+        ])
+
+    if ocr_text or visual_elements:
+        lines.extend([
+            "## Slide Content",
+            "",
+        ])
+        if ocr_text:
+            lines.extend([ocr_text, ""])
+        if visual_elements:
+            elements_str = ", ".join(visual_elements)
+            lines.append(f"**Visual Elements:** {elements_str}")
+            lines.append("")
+
+    return "\n".join(lines)
+
+
+def _build_index_markdown(
+    video_path: Path,
+    source_url: str | None,
+    duration: float,
+    model: str,
+    slide_lines: List[str],
+) -> str:
+    """Build the index Markdown file."""
+    lines = [
+        "# Lecture Slides",
+        "",
+        f"**Video:** {video_path.name}  ",
+    ]
+
+    if source_url:
+        lines.append(f"**Source:** {source_url}  ")
+
+    duration_str = _format_timestamp(duration)
+    processed_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    lines.extend([
+        f"**Duration:** {duration_str}  ",
+        f"**Transcription Model:** {model}  ",
+        f"**Processed:** {processed_at}",
+        "",
+        "## Slides",
+        "",
+    ])
+
+    lines.extend(slide_lines)
+    lines.append("")
+
+    return "\n".join(lines)
