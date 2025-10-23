@@ -115,7 +115,7 @@ def export_slides_json(
             slide_sections.append(section)
 
             index_lines.append(
-                f"{slide_index}. [![thumb](slides/{image_filename})](#{slide_id}) • {time_str}"
+                f"- [Slide {slide_index}](#{slide_id}) • {time_str}"
             )
 
     # Write output file(s)

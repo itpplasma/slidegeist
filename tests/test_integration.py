@@ -54,7 +54,7 @@ def test_process_video_produces_slides_json(tmp_path: Path, monkeypatch: pytest.
         slides_dir = output_dir / "slides"
         slides_dir.mkdir(parents=True, exist_ok=True)
         paths: list[tuple[int, float, float, Path]] = []
-        for index, start in enumerate([0.0, 2.0]):
+        for index, start in enumerate([0.0, 2.0], start=1):  # 1-based numbering
             end = start + 2.0
             slide_path = slides_dir / f"slide_{index:03d}.{image_format}"
             slide_path.write_bytes(b"fake image")
@@ -103,14 +103,14 @@ def test_process_video_produces_slides_json(tmp_path: Path, monkeypatch: pytest.
     output_dir = result.get("output_dir")
     assert isinstance(output_dir, Path)
 
-    # Default mode: single slides.md file
-    assert "## Slide 0" in slides_content
+    # Default mode: single slides.md file with 1-based numbering
+    assert "## Slide 1" in slides_content
     assert "Hello" in slides_content
     assert "refined" in slides_content  # OCR content
 
     # Should not have separate slide files in default mode
-    slide_000_md = output_dir / "slide_000.md"
-    assert not slide_000_md.exists()
+    slide_001_md = output_dir / "slide_001.md"
+    assert not slide_001_md.exists()
 
 
 def test_cli_process_default_invocation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

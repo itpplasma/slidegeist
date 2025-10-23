@@ -5,10 +5,11 @@ Extract slides and timestamped transcripts from lecture videos with minimal depe
 ## Features
 
 - **Scene detection** using global pixel difference (research-based method optimized for lecture videos)
-- **Automatic slide extraction** with simple numbered filenames
+- **Automatic slide extraction** with simple numbered filenames (slide_001, slide_002, ...)
 - **Audio transcription** with Whisper large-v3 model (highest quality)
 - **MLX acceleration** on Apple Silicon Macs for 2-3x faster transcription
-- **Markdown export** with per-slide files containing transcripts and OCR content
+- **Markdown export** - single `slides.md` file (LLM-friendly) or split mode with separate files
+- **OCR with refinement** - Tesseract OCR with optional Qwen3-VL vision model enhancement
 
 ## Requirements
 
@@ -61,14 +62,29 @@ slidegeist lecture.mp4 --out output/
 This creates:
 ```
 output/
+├── slides.md                        # Combined file with table of contents and all slides
+└── slides/
+    ├── slide_001.jpg                # Slide images (1-based numbering)
+    ├── slide_002.jpg
+    └── slide_003.jpg
+```
+
+For separate slide files (useful for navigation in some tools), use `--split`:
+```bash
+slidegeist lecture.mp4 --split
+```
+
+This creates:
+```
+output/
 ├── index.md                         # Overview with links to all slides
-├── slide_000.md                     # Slide 0 with transcript and OCR
 ├── slide_001.md                     # Slide 1 with transcript and OCR
 ├── slide_002.md                     # Slide 2 with transcript and OCR
+├── slide_003.md                     # Slide 3 with transcript and OCR
 └── slides/
-    ├── slide_000.jpg                # Slide images
-    ├── slide_001.jpg
-    └── slide_002.jpg
+    ├── slide_001.jpg                # Slide images
+    ├── slide_002.jpg
+    └── slide_003.jpg
 ```
 
 ## Usage
@@ -112,6 +128,8 @@ slidegeist {process,slides} <video> [options]
 
 Options:
   --out DIR              Output directory (default: video filename)
+  --split               Create separate markdown files (index.md + slide_NNN.md)
+                        instead of single slides.md (default: combined file)
   --scene-threshold NUM  Initial scene detection sensitivity 0.0-1.0 (default: 0.025)
                          Used as the optimizer's starting threshold; it will
                          auto-adjust to reach a stable segment count.
@@ -125,37 +143,82 @@ Options:
 
 ## Output Format
 
-### File Structure
+### Default: Combined slides.md (Recommended)
 
-- **Slide images**: `slides/slide_XXX.jpg` - Simple numbered filenames in slides/ subfolder
-- **Slide markdown**: `slide_XXX.md` - Per-slide files with YAML front matter, transcript, and OCR content
-- **Index**: `index.md` - Overview with video metadata and links to all slides
+By default, Slidegeist creates a single `slides.md` file containing:
+- Video metadata (source, duration, model used)
+- Table of contents with clickable links to each slide
+- All slides with images, transcripts, and OCR content
 
-### Slide Markdown Format
+**Benefits:**
+- Single file is easy to process with LLMs
+- No navigation between files needed
+- Smaller overall output size
 
-Each `slide_XXX.md` file contains:
+Example structure:
+```markdown
+# Lecture Slides
+
+**Video:** lecture.mp4
+**Duration:** 45:30
+**Transcription Model:** large-v3
+
+## Table of Contents
+
+- [Slide 1](#slide_001) • 00:00-05:15
+- [Slide 2](#slide_002) • 05:15-12:30
+...
+
+---
+
+## Slide 1
+
+**Time:** 00:00 - 05:15
+
+![Slide](slides/slide_001.jpg)
+
+**Slide Content:**
+Introduction to Quantum Mechanics
+
+**Transcript:**
+Today we discuss quantum mechanics and its implications...
+
+---
+
+## Slide 2
+...
+```
+
+### Split Mode (--split flag)
+
+With `--split`, creates separate files for each slide (useful for some viewers/tools):
+- **Index**: `index.md` - Overview with links to individual slide files
+- **Slide markdown**: `slide_001.md`, `slide_002.md`, ... - Per-slide files with YAML front matter
+- **Slide images**: `slides/slide_001.jpg`, `slides/slide_002.jpg`, ...
+
+Each split slide file contains:
 ```markdown
 ---
 id: slide_001
 index: 1
-time_start: 125.0
-time_end: 247.5
+time_start: 0.0
+time_end: 315.0
 image: slides/slide_001.jpg
 ---
 
 # Slide 1
 
-![Slide Image](slides/slide_001.jpg)
+[![Slide Image](slides/slide_001.jpg)](slides/slide_001.jpg)
 
 ## Transcript
 
-Today we discuss quantum mechanics and its implications...
+Today we discuss quantum mechanics...
 
 ## Slide Content
 
-Key Topics: Wave-particle duality, Heisenberg uncertainty principle
+Introduction to Quantum Mechanics
 
-**Visual Elements:** diagram, formula, arrow
+**Visual Elements:** diagram, formula
 ```
 
 ## How It Works

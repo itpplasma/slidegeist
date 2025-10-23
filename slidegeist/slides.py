@@ -27,13 +27,13 @@ def format_slide_filename(index: int, total_slides: int) -> str:
     """Format zero-padded slide filename.
 
     Args:
-        index: Slide index (0-based).
+        index: Slide index (1-based).
         total_slides: Total number of slides (for padding calculation).
 
     Returns:
-        Formatted string like 'slide_000' or 'slide_042'
+        Formatted string like 'slide_001' or 'slide_042'
     """
-    padding = max(3, len(str(total_slides - 1)))
+    padding = max(3, len(str(total_slides)))
     return f"slide_{index:0{padding}d}"
 
 
@@ -82,6 +82,7 @@ def extract_slides(
     logger.info(f"Extracting {total_slides} slides")
 
     for i in range(total_slides):
+        slide_num = i + 1  # 1-based slide numbering
         start_time = boundaries[i]
         end_time = boundaries[i + 1]
         segment_duration = end_time - start_time
@@ -106,18 +107,18 @@ def extract_slides(
         max_seek = max(duration - 0.1, 0.0)
         extract_time = min(max(extract_time, 0.0), max_seek)
 
-        # Create indexed filename
-        filename_base = format_slide_filename(i, total_slides)
+        # Create indexed filename (1-based)
+        filename_base = format_slide_filename(slide_num, total_slides)
         filename = f"{filename_base}.{image_format}"
         output_path = slides_dir / filename
 
         logger.debug(
-            f"Slide {i}: {start_time:.2f}s - {end_time:.2f}s "
+            f"Slide {slide_num}: {start_time:.2f}s - {end_time:.2f}s "
             f"(extracting at {extract_time:.2f}s)"
         )
 
         extract_frame(video_path, extract_time, output_path, image_format)
-        slide_data.append((i, start_time, end_time, output_path))
+        slide_data.append((slide_num, start_time, end_time, output_path))
 
     logger.info(f"Extracted {len(slide_data)} slides to {slides_dir}")
     return slide_data
