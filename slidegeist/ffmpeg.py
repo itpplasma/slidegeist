@@ -64,19 +64,26 @@ def detect_scenes(
     min_scene_len: float = DEFAULT_MIN_SCENE_LEN,
     start_offset: float = DEFAULT_START_OFFSET
 ) -> list[float]:
-    """Detect slide changes in a video using Global Pixel Difference.
+    """Detect slide changes using Opencast's FFmpeg-based optimization.
 
-    Uses pixel-level differencing on binarized frames to detect content changes.
-    Research shows this is the most effective method for lecture videos.
+    Uses FFmpeg's scene filter (SAD-based) with iterative optimization to
+    achieve a target number of segments based on video duration. Matches
+    Opencast's video segmentation approach exactly.
 
-    Based on research: "An experimental comparative study on slide change detection
-    in lecture videos" (Eruvaram et al., 2018)
+    Target: 30 segments per hour (research shows 15-45 slides/hour is typical)
+    Method: Iteratively adjusts threshold until segment count is within 25% of target
+
+    Based on: Opencast VideoSegmenterServiceImpl
+    (https://docs.opencast.org/r/4.x/admin/modules/videosegmentation/)
 
     Args:
         video_path: Path to the video file.
-        threshold: Scene detection threshold (0-1 scale, normalized pixel difference).
-                  Lower = more sensitive. Typical range: 0.02-0.20 for presentations.
-        min_scene_len: Minimum scene length in seconds (filters rapid clicks).
+        threshold: Initial scene detection threshold (0-1 scale, FFmpeg scene score).
+                  Lower = more sensitive. Opencast default: 0.025 (2.5%).
+                  This will be automatically adjusted during optimization.
+        min_scene_len: Minimum segment length in seconds (stability threshold).
+                      Segments shorter than this are merged with adjacent segments.
+                      Adapted from Opencast's 60s default to 2s for slide detection.
         start_offset: Skip first N seconds to avoid mouse movement during setup.
 
     Returns:
@@ -88,16 +95,37 @@ def detect_scenes(
     if not video_path.exists():
         raise FFmpegError(f"Video file not found: {video_path}")
 
-    # Use Global Pixel Difference method
-    # Research: Best performance for lecture videos (high recall and precision)
-    from slidegeist.pixel_diff_detector import detect_slides_pixel_diff
-
-    return detect_slides_pixel_diff(
-        video_path,
-        start_offset=start_offset,
-        min_scene_len=min_scene_len,
-        threshold=threshold
+    from slidegeist.constants import (
+        DEFAULT_MAX_CYCLES,
+        DEFAULT_MAX_ERROR,
+        DEFAULT_SEGMENTS_PER_HOUR,
     )
+    from slidegeist.ffmpeg_scene import detect_scenes_opencast
+
+    # Get video duration to calculate target segments
+    video_duration = get_video_duration(video_path)
+    duration_hours = video_duration / 3600.0
+
+    # Calculate target segments based on duration (30 segments/hour)
+    target_segments = max(3, int(DEFAULT_SEGMENTS_PER_HOUR * duration_hours))
+
+    logger.info(
+        f"Video duration: {video_duration/60:.1f} min "
+        f"({duration_hours:.2f} hours), targeting {target_segments} segments"
+    )
+
+    # Run Opencast-style optimization
+    timestamps, final_threshold = detect_scenes_opencast(
+        video_path,
+        target_segments=target_segments,
+        max_error=DEFAULT_MAX_ERROR,
+        max_cycles=DEFAULT_MAX_CYCLES,
+        initial_threshold=threshold,
+        stability_threshold=min_scene_len,
+        start_offset=start_offset
+    )
+
+    return timestamps
 
 
 def extract_frame(

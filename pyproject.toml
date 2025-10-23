@@ -62,4 +62,8 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "--cov=slidegeist --cov-report=term-missing"
+addopts = "--cov=slidegeist --cov-report=term-missing -m 'not manual'"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "manual: marks tests requiring manual intervention or validation",
+]
