@@ -28,6 +28,7 @@ except ImportError:
 # Optional PySceneDetect
 try:
     from scenedetect import detect, ContentDetector, SceneManager, open_video
+    from scenedetect.detectors import HistogramDetector, HashDetector
     from scenedetect.stats_manager import StatsManager
     HAS_PYSCENEDETECT = True
 except ImportError:
@@ -182,16 +183,35 @@ def sweep_thresholds(
     return thresholds, np.array(slide_counts)
 
 
-def compute_pyscenedetect_scores(video_path: Path) -> tuple[list[float], float]:
-    """Compute PySceneDetect ContentDetector scores using stats file.
+def compute_pyscenedetect_scores(video_path: Path, detector_name: str) -> tuple[list[float], float, str]:
+    """Compute PySceneDetect detector scores using stats file.
+
+    Args:
+        video_path: Path to video
+        detector_name: 'content', 'histogram', or 'hash'
 
     Returns:
-        (content_vals, fps) where content_vals are the frame scores
+        (score_vals, fps, metric_key) where metric_key is the CSV column name
     """
     if not HAS_PYSCENEDETECT:
         raise RuntimeError("PySceneDetect not installed")
 
-    print("\nRunning PySceneDetect ContentDetector...")
+    # Create detector and determine metric key prefix
+    # Note: actual CSV column names have parameters in brackets
+    if detector_name == 'content':
+        detector = ContentDetector()
+        metric_prefix = 'content_val'
+        print("\nRunning PySceneDetect ContentDetector (HSV)...")
+    elif detector_name == 'histogram':
+        detector = HistogramDetector()
+        metric_prefix = 'hist_diff'
+        print("\nRunning PySceneDetect HistogramDetector (YUV)...")
+    elif detector_name == 'hash':
+        detector = HashDetector()
+        metric_prefix = 'hash_dist'
+        print("\nRunning PySceneDetect HashDetector (perceptual hash)...")
+    else:
+        raise ValueError(f"Unknown detector: {detector_name}")
 
     # Create temp stats file
     with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
@@ -199,13 +219,13 @@ def compute_pyscenedetect_scores(video_path: Path) -> tuple[list[float], float]:
 
     video = None
     try:
-        # Process video with ContentDetector and save stats
+        # Process video with detector and save stats
         video = open_video(str(video_path))
         fps = video.frame_rate
 
         stats_manager = StatsManager()
         scene_manager = SceneManager(stats_manager)
-        scene_manager.add_detector(ContentDetector())
+        scene_manager.add_detector(detector)
 
         # Process all frames
         scene_manager.detect_scenes(video)
@@ -213,17 +233,28 @@ def compute_pyscenedetect_scores(video_path: Path) -> tuple[list[float], float]:
         # Save stats to file
         stats_manager.save_to_csv(str(stats_file))
 
-        # Read stats file
+        # Read stats file - find column matching metric prefix
         import csv
-        content_vals = []
+        score_vals = []
         with open(stats_file, 'r') as f:
             reader = csv.DictReader(f)
-            for row in reader:
-                if 'content_val' in row and row['content_val']:
-                    content_vals.append(float(row['content_val']))
+            # Find actual column name (may have parameters in brackets)
+            if reader.fieldnames:
+                metric_key = None
+                for field in reader.fieldnames:
+                    if field.startswith(metric_prefix):
+                        metric_key = field
+                        break
 
-        print(f"PySceneDetect computed {len(content_vals)} frame scores")
-        return content_vals, fps
+                if not metric_key:
+                    raise RuntimeError(f"No column found starting with {metric_prefix}")
+
+                for row in reader:
+                    if metric_key in row and row[metric_key]:
+                        score_vals.append(float(row[metric_key]))
+
+        print(f"PySceneDetect {detector_name} computed {len(score_vals)} frame scores (column: {metric_key})")
+        return score_vals, fps, metric_key
 
     finally:
         # Clean up video
@@ -281,31 +312,49 @@ def plot_sweep(
     slide_counts: np.ndarray,
     expected_slides: int | None = None,
     video_name: str = "Video",
-    pyscene_thresholds: np.ndarray | None = None,
-    pyscene_counts: np.ndarray | None = None
+    pyscene_results: list[tuple[str, np.ndarray, np.ndarray]] | None = None
 ):
-    """Plot threshold sweep results."""
+    """Plot threshold sweep results.
+
+    Args:
+        thresholds: slidegeist thresholds
+        slide_counts: slidegeist slide counts
+        expected_slides: expected slide count
+        video_name: video filename
+        pyscene_results: list of (detector_name, thresholds, counts) tuples
+    """
     if not HAS_MATPLOTLIB:
         print("\nCannot plot without matplotlib")
         return
 
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=(14, 7))
 
     # Plot our method (slidegeist)
-    ax.plot(thresholds, slide_counts, 'b-', linewidth=2, label='slidegeist (binary pixel diff)')
-    ax.scatter(thresholds, slide_counts, c='blue', s=20, alpha=0.5)
+    ax.plot(thresholds, slide_counts, 'b-', linewidth=2.5, label='slidegeist (binary pixel diff)', zorder=10)
+    ax.scatter(thresholds, slide_counts, c='blue', s=30, alpha=0.6, zorder=10)
 
-    # Plot PySceneDetect if available
-    if pyscene_thresholds is not None and pyscene_counts is not None:
+    # Plot PySceneDetect methods if available
+    colors = ['red', 'orange', 'purple']
+    if pyscene_results:
         # Create second x-axis for PySceneDetect (different scale)
         ax2 = ax.twiny()
-        ax2.plot(pyscene_thresholds, pyscene_counts, 'r-', linewidth=2, label='PySceneDetect (HSV ContentDetector)')
-        ax2.scatter(pyscene_thresholds, pyscene_counts, c='red', s=20, alpha=0.5)
-        ax2.set_xlabel('PySceneDetect Threshold (0-255 scale)', fontsize=12, color='red')
-        ax2.tick_params(axis='x', labelcolor='red')
 
-        # Add PySceneDetect legend
-        ax2.legend(loc='upper right', fontsize=10)
+        for idx, (detector_name, pyscene_thresholds, pyscene_counts) in enumerate(pyscene_results):
+            color = colors[idx % len(colors)]
+            label_map = {
+                'content': 'PySceneDetect ContentDetector (HSV)',
+                'histogram': 'PySceneDetect HistogramDetector (YUV)',
+                'hash': 'PySceneDetect HashDetector (perceptual hash)'
+            }
+            label = label_map.get(detector_name, detector_name)
+
+            ax2.plot(pyscene_thresholds, pyscene_counts, color=color, linestyle='-',
+                    linewidth=2, label=label, alpha=0.8)
+            ax2.scatter(pyscene_thresholds, pyscene_counts, c=color, s=20, alpha=0.5)
+
+        ax2.set_xlabel('PySceneDetect Threshold', fontsize=12, color='darkred')
+        ax2.tick_params(axis='x', labelcolor='darkred')
+        ax2.legend(loc='upper right', fontsize=9)
 
     # Mark expected slide count if provided
     if expected_slides:
@@ -456,23 +505,31 @@ def main():
     print_text_summary(thresholds, slide_counts, args.expected_slides)
 
     # Optionally run PySceneDetect comparison
-    pyscene_thresholds = None
-    pyscene_counts = None
+    pyscene_results = []
     if args.compare_pyscenedetect:
         if not HAS_PYSCENEDETECT:
             print("\nWarning: PySceneDetect not installed. Install with: pip install scenedetect[opencv]")
         else:
-            try:
-                content_vals, pyscene_fps = compute_pyscenedetect_scores(args.video)
-                pyscene_thresholds, pyscene_counts = sweep_pyscenedetect_thresholds(
-                    content_vals,
-                    pyscene_fps,
-                    threshold_range=(args.pyscene_threshold_min, args.pyscene_threshold_max),
-                    threshold_step=args.pyscene_threshold_step
-                )
-                print(f"\nPySceneDetect sweep complete: {len(pyscene_thresholds)} thresholds tested")
-            except Exception as e:
-                print(f"\nWarning: PySceneDetect comparison failed: {e}")
+            # Define detector configs: (name, threshold_range, step)
+            detector_configs = [
+                ('content', (args.pyscene_threshold_min, args.pyscene_threshold_max), args.pyscene_threshold_step),
+                ('histogram', (0.1, 5.0), 0.1),
+                ('hash', (0.2, 0.8), 0.02),
+            ]
+
+            for detector_name, threshold_range, threshold_step in detector_configs:
+                try:
+                    score_vals, pyscene_fps, metric_key = compute_pyscenedetect_scores(args.video, detector_name)
+                    pyscene_thresholds, pyscene_counts = sweep_pyscenedetect_thresholds(
+                        score_vals,
+                        pyscene_fps,
+                        threshold_range=threshold_range,
+                        threshold_step=threshold_step
+                    )
+                    pyscene_results.append((detector_name, pyscene_thresholds, pyscene_counts))
+                    print(f"PySceneDetect {detector_name} sweep complete: {len(pyscene_thresholds)} thresholds tested")
+                except Exception as e:
+                    print(f"\nWarning: PySceneDetect {detector_name} comparison failed: {e}")
 
     # Plot if matplotlib available
     if HAS_MATPLOTLIB:
@@ -481,8 +538,7 @@ def main():
             slide_counts,
             args.expected_slides,
             args.video.name,
-            pyscene_thresholds,
-            pyscene_counts
+            pyscene_results if pyscene_results else None
         )
     else:
         print("\nInstall matplotlib to see plot: pip install matplotlib")
