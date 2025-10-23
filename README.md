@@ -36,17 +36,17 @@ winget install ffmpeg
 ## Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/itpplasma/slidegeist.git
+pip install slidegeist
+```
+
+- Apple Silicon users can get MLX acceleration with `pip install "slidegeist[mlx]"`.
+- Enable Whisper CUDA builds by installing PyTorch with CUDA before Slidegeist.
+
+### Developer Setup
+
+```bash
+git clone git@github.com:itpplasma/slidegeist.git
 cd slidegeist
-
-# Install with pip
-pip install -e .
-
-# On Apple Silicon Macs, install with MLX for 2-3x faster transcription
-pip install -e ".[mlx]"
-
-# Or with development dependencies
 pip install -e ".[dev]"
 ```
 
