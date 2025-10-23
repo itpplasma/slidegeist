@@ -28,6 +28,12 @@ LABELED_VIDEOS = [
         notes="TU Graz presentation with 15 labeled slides",
     ),
     LabeledVideo(
+        name="tugraz_presentation_15b",
+        url="https://tube.tugraz.at/portal/watch/58502d58-ba76-4628-ac55-f7cca0584d10",
+        slide_count=15,
+        notes="TU Graz presentation with 15 labeled slides (second sample)",
+    ),
+    LabeledVideo(
         name="tugraz_presentation_30",
         url="https://tube.tugraz.at/portal/watch/4bb83577-3a97-4832-90ac-3d72600336a4",
         slide_count=30,
