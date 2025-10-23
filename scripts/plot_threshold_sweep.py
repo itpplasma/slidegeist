@@ -329,9 +329,14 @@ def plot_sweep(
 
     fig, ax = plt.subplots(figsize=(14, 7))
 
-    # Plot our method (slidegeist) - already in 0-1 range
-    ax.plot(thresholds, slide_counts, 'b-', linewidth=2.5, label='slidegeist (binary pixel diff, 0-1)', zorder=10)
-    ax.scatter(thresholds, slide_counts, c='blue', s=30, alpha=0.6, zorder=10)
+    # Plot our method (slidegeist) - normalize to 0-1 like others
+    thresh_min_sg = thresholds.min()
+    thresh_max_sg = thresholds.max()
+    normalized_thresholds_sg = (thresholds - thresh_min_sg) / (thresh_max_sg - thresh_min_sg)
+
+    ax.plot(normalized_thresholds_sg, slide_counts, 'b-', linewidth=2.5,
+            label=f'slidegeist (binary pixel diff, {thresh_min_sg:.2f}-{thresh_max_sg:.2f})', zorder=10)
+    ax.scatter(normalized_thresholds_sg, slide_counts, c='blue', s=30, alpha=0.6, zorder=10)
 
     # Plot PySceneDetect methods if available - normalize their thresholds to 0-1
     colors = ['red', 'orange', 'purple']
