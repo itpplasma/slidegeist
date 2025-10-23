@@ -406,7 +406,8 @@ def plot_sweep(
     expected_slides: int | None = None,
     video_name: str = "Video",
     pyscene_results: list[tuple[str, np.ndarray, np.ndarray]] | None = None,
-    z_score_results: tuple[np.ndarray, np.ndarray] | None = None
+    z_score_results: tuple[np.ndarray, np.ndarray] | None = None,
+    opencast_result: tuple[float, int] | None = None
 ):
     """Plot threshold sweep results.
 
@@ -417,6 +418,7 @@ def plot_sweep(
         video_name: video filename
         pyscene_results: list of (detector_name, thresholds, counts) tuples
         z_score_results: tuple of (z_thresholds, z_slide_counts)
+        opencast_result: tuple of (opencast_threshold, opencast_count) if available
     """
     if not HAS_MATPLOTLIB:
         print("\nCannot plot without matplotlib")
@@ -516,6 +518,18 @@ def plot_sweep(
                        color='purple', markersize=15,
                        markeredgecolor='white', markeredgewidth=1.5, zorder=20,
                        label=f'z-score optimal')
+
+        # Opencast-style optimization marker
+        if opencast_result:
+            opencast_threshold, opencast_count = opencast_result
+            # Normalize opencast threshold to our raw threshold scale
+            thresh_min_sg = thresholds.min()
+            thresh_max_sg = thresholds.max()
+            opencast_norm = (opencast_threshold - thresh_min_sg) / (thresh_max_sg - thresh_min_sg)
+            ax.plot(opencast_norm, opencast_count, 'D',
+                   color='green', markersize=12,
+                   markeredgecolor='white', markeredgewidth=1.5, zorder=20,
+                   label=f'Opencast-style (adapted, θ={opencast_threshold:.3f})')
 
     ax.set_xlabel('Normalized Threshold (log scale)', fontsize=12)
     ax.set_ylabel('Number of Slides (log scale)', fontsize=12)
@@ -694,6 +708,32 @@ def main():
         )
         print(f"Z-score sweep complete: {len(z_thresholds)} thresholds tested")
 
+        # Run Opencast-style optimization if expected_slides is known
+        opencast_result = None
+        if expected_slides:
+            print(f"\nRunning Opencast FFmpeg-based optimization (target={expected_slides})...")
+            from slidegeist.ffmpeg_scene import detect_scenes_opencast
+            try:
+                # NOTE: Using stability_threshold=2.0s instead of Opencast's default 60.0s
+                # Rationale: Slide presentations have much faster scene changes than
+                # general lecture videos. A 60s threshold would merge all slides together.
+                # For slide detection, 2s is appropriate to filter camera/presenter movements
+                # while preserving slide transitions.
+                opencast_timestamps, opencast_threshold = detect_scenes_opencast(
+                    video_path,
+                    target_segments=expected_slides,
+                    max_cycles=3,
+                    initial_threshold=0.025,
+                    stability_threshold=2.0,  # Adapted for slide detection (not Opencast's 60s)
+                    start_offset=3.0
+                )
+                # Count segments: N cut points = N+1 segments
+                opencast_segments = len(opencast_timestamps) + 1 if opencast_timestamps else 1
+                opencast_result = (opencast_threshold, opencast_segments)
+                print(f"Opencast-style optimization: threshold={opencast_threshold:.4f}, segments={opencast_segments}")
+            except Exception as e:
+                print(f"Warning: Opencast-style optimization failed: {e}")
+
         # Optionally run PySceneDetect comparison
         pyscene_results = []
         if args.compare_pyscenedetect:
@@ -728,7 +768,8 @@ def main():
                 expected_slides,
                 video_name,
                 pyscene_results if pyscene_results else None,
-                z_score_results=(z_thresholds, z_slide_counts)
+                z_score_results=(z_thresholds, z_slide_counts),
+                opencast_result=opencast_result
             )
         else:
             print("\nInstall matplotlib to see plot: pip install matplotlib")
