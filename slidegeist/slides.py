@@ -23,23 +23,18 @@ def format_timestamp_hhmmss(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
-def format_slide_filename(index: int, total_slides: int, t_start: float, t_end: float) -> str:
-    """Format zero-padded slide filename with HH:MM:SS timestamps.
+def format_slide_filename(index: int, total_slides: int) -> str:
+    """Format zero-padded slide filename.
 
     Args:
         index: Slide index (0-based).
         total_slides: Total number of slides (for padding calculation).
-        t_start: Start time in seconds.
-        t_end: End time in seconds.
 
     Returns:
-        Formatted string like 'slide_000_00:00:00-00:02:05' or 'slide_042_01:01:01-01:02:02'
+        Formatted string like 'slide_000' or 'slide_042'
     """
-    # Determine padding based on total slides
     padding = max(3, len(str(total_slides - 1)))
-    start_ts = format_timestamp_hhmmss(t_start)
-    end_ts = format_timestamp_hhmmss(t_end)
-    return f"slide_{index:0{padding}d}_{start_ts}-{end_ts}"
+    return f"slide_{index:0{padding}d}"
 
 
 def extract_slides(
@@ -69,6 +64,8 @@ def extract_slides(
         raise ValueError("Scene timestamps must be sorted")
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    slides_dir = output_dir / "slides"
+    slides_dir.mkdir(parents=True, exist_ok=True)
 
     # Get video duration to know the end time
     duration = get_video_duration(video_path)
@@ -109,10 +106,10 @@ def extract_slides(
         max_seek = max(duration - 0.1, 0.0)
         extract_time = min(max(extract_time, 0.0), max_seek)
 
-        # Create indexed filename with timestamps
-        filename_base = format_slide_filename(i, total_slides, start_time, end_time)
+        # Create indexed filename
+        filename_base = format_slide_filename(i, total_slides)
         filename = f"{filename_base}.{image_format}"
-        output_path = output_dir / filename
+        output_path = slides_dir / filename
 
         logger.debug(
             f"Slide {i}: {start_time:.2f}s - {end_time:.2f}s "
@@ -122,5 +119,5 @@ def extract_slides(
         extract_frame(video_path, extract_time, output_path, image_format)
         slide_data.append((i, start_time, end_time, output_path))
 
-    logger.info(f"Extracted {len(slide_data)} slides to {output_dir}")
+    logger.info(f"Extracted {len(slide_data)} slides to {slides_dir}")
     return slide_data

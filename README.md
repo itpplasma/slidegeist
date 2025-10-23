@@ -5,10 +5,10 @@ Extract slides and timestamped transcripts from lecture videos with minimal depe
 ## Features
 
 - **Scene detection** using global pixel difference (research-based method optimized for lecture videos)
-- **Automatic slide extraction** with timestamp ranges in filenames
+- **Automatic slide extraction** with simple numbered filenames
 - **Audio transcription** with Whisper large-v3 model (highest quality)
 - **MLX acceleration** on Apple Silicon Macs for 2-3x faster transcription
-- **JSON export** with slides grouped by their transcripts
+- **Markdown export** with per-slide files containing transcripts and OCR content
 
 ## Requirements
 
@@ -61,10 +61,14 @@ slidegeist lecture.mp4 --out output/
 This creates:
 ```
 output/
-├── slide_000_00:00:00-00:02:05.jpg  # Slide from 0:00 to 2:05
-├── slide_001_00:02:05-00:04:47.jpg  # Slide from 2:05 to 4:47
-├── slide_002_00:04:47-00:07:30.jpg  # Slide from 4:47 to 7:30
-└── slides.json                      # Slides with transcripts and metadata
+├── index.md                         # Overview with links to all slides
+├── slide_000.md                     # Slide 0 with transcript and OCR
+├── slide_001.md                     # Slide 1 with transcript and OCR
+├── slide_002.md                     # Slide 2 with transcript and OCR
+└── slides/
+    ├── slide_000.jpg                # Slide images
+    ├── slide_001.jpg
+    └── slide_002.jpg
 ```
 
 ## Usage
@@ -121,35 +125,37 @@ Options:
 
 ## Output Format
 
-### Slide Filenames
+### File Structure
 
-Slides are named with their time range: `slide_[index]_[HH:MM:SS]-[HH:MM:SS].jpg`
+- **Slide images**: `slides/slide_XXX.jpg` - Simple numbered filenames in slides/ subfolder
+- **Slide markdown**: `slide_XXX.md` - Per-slide files with YAML front matter, transcript, and OCR content
+- **Index**: `index.md` - Overview with video metadata and links to all slides
 
-- Index is zero-padded (at least 3 digits)
-- Timestamps in HH:MM:SS format
-- Example: `slide_001_00:02:05-00:04:47.jpg` is slide 1 covering 2:05 to 4:47
+### Slide Markdown Format
 
-### slides.json Format
+Each `slide_XXX.md` file contains:
+```markdown
+---
+id: slide_001
+index: 1
+time_start: 125.0
+time_end: 247.5
+image: slides/slide_001.jpg
+---
 
-JSON file with slides grouped by their transcripts:
-```json
-{
-  "metadata": {
-    "video_file": "lecture.mp4",
-    "duration_seconds": 3600,
-    "processed_at": "2025-01-15T10:30:00Z",
-    "model": "large-v3"
-  },
-  "slides": [
-    {
-      "slide_number": 0,
-      "image_path": "slide_000_00:00:00-00:02:05.jpg",
-      "time_start": 0,
-      "time_end": 125,
-      "transcript": "Welcome to today's lecture on quantum mechanics."
-    }
-  ]
-}
+# Slide 1
+
+![Slide Image](slides/slide_001.jpg)
+
+## Transcript
+
+Today we discuss quantum mechanics and its implications...
+
+## Slide Content
+
+Key Topics: Wave-particle duality, Heisenberg uncertainty principle
+
+**Visual Elements:** diagram, formula, arrow
 ```
 
 ## How It Works
@@ -159,11 +165,12 @@ JSON file with slides grouped by their transcripts:
    - Treats `--scene-threshold` as the *initial* threshold; the optimizer raises or lowers it until the slide count converges
    - Merges segments shorter than 2 seconds to suppress rapid flickers
    - Based on Opencast's VideoSegmenterService implementation
-2. **Slide Extraction**: Extracts the final frame before each scene change using FFmpeg
+2. **Slide Extraction**: Extracts frames at 80% through each segment into `slides/` directory with simple `slide_XXX.jpg` names
 3. **Transcription**: Uses Whisper large-v3 for state-of-the-art speech-to-text with timestamps
    - Auto-detects and uses MLX on Apple Silicon for 2-3x speedup
    - Falls back to faster-whisper on other platforms
-4. **Export**: Generates JSON file with slides grouped by their transcript text
+4. **OCR** (optional): Uses Tesseract OCR with optional Qwen3-VL refinement (MLX only on Apple Silicon)
+5. **Export**: Generates Markdown files with YAML front matter, linking slides to their transcripts and OCR content
 
 ## Performance
 

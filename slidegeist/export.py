@@ -28,9 +28,6 @@ def export_slides_json(
     output_dir = output_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    slides_dir = output_dir / "slides"
-    slides_dir.mkdir(parents=True, exist_ok=True)
-
     if ocr_pipeline is None:
         ocr_pipeline = build_default_ocr_pipeline()
 
@@ -78,12 +75,12 @@ def export_slides_json(
             visual_elements=visual_elements,
         )
 
-        per_slide_path = slides_dir / f"{slide_id}.md"
+        per_slide_path = output_dir / f"{slide_id}.md"
         per_slide_path.write_text(markdown_content, encoding="utf-8")
 
         time_str = f"{_format_timestamp(t_start)}-{_format_timestamp(t_end)}"
         index_lines.append(
-            f"{slide_index}. [Slide {slide_index}](slides/{slide_id}.md) • "
+            f"{slide_index}. [Slide {slide_index}]({slide_id}.md) • "
             f"![thumb](slides/{image_filename}) • {time_str}"
         )
 
@@ -180,12 +177,12 @@ def _build_slide_markdown(
         f"index: {slide_index}",
         f"time_start: {t_start}",
         f"time_end: {t_end}",
-        f"image: {image_filename}",
+        f"image: slides/{image_filename}",
         "---",
         "",
         f"# Slide {slide_index}",
         "",
-        f"![Slide Image]({image_filename})",
+        f"![Slide Image](slides/{image_filename})",
         "",
     ]
 

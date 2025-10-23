@@ -1,6 +1,5 @@
-"""Tests for JSON export functionality."""
+"""Tests for Markdown export functionality."""
 
-import json
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -11,8 +10,18 @@ from slidegeist.export import export_slides_json
 from slidegeist.transcribe import Segment
 
 
+class _StubPrimaryExtractor:
+    """Stub primary OCR extractor."""
+    @property
+    def is_available(self) -> bool:
+        return True
+
+
 class _StubOcrPipeline:
     """Deterministic OCR output for testing."""
+
+    def __init__(self) -> None:
+        self._primary = _StubPrimaryExtractor()
 
     def process(
         self,
@@ -63,7 +72,7 @@ def test_export_slides_manifest_and_payloads(tmp_path: Path) -> None:
         {"start": 15.0, "end": 20.0, "text": "And then Einstein.", "words": []},
     ]
 
-    output_file = tmp_path / "slides.json"
+    output_file = tmp_path / "index.md"
     ocr_stub = _StubOcrPipeline()
 
     export_slides_json(
@@ -77,32 +86,26 @@ def test_export_slides_manifest_and_payloads(tmp_path: Path) -> None:
 
     assert output_file.exists()
 
-    with output_file.open() as handle:
-        manifest = json.load(handle)
+    index_content = output_file.read_text()
+    assert "# Lecture Slides" in index_content
+    assert "video.mp4" in index_content
+    assert "tiny" in index_content
+    assert "Slide 1" in index_content
+    assert "Slide 2" in index_content
 
-    assert manifest["metadata"]["video_file"] == "video.mp4"
-    assert manifest["metadata"]["duration_seconds"] == 20.0
-    assert manifest["metadata"]["model"] == "tiny"
-    assert len(manifest["slides"]) == 2
-
-    slide_entry = manifest["slides"][0]
-    assert slide_entry["id"] == img1.stem
-    assert slide_entry["image_path"] == "slides/slide_001.jpg"
-    assert slide_entry["time_start"] == 0.0
-    assert slide_entry["time_end"] == 10.0
-
-    per_slide_path = tmp_path / slide_entry["json_path"]
-    assert per_slide_path.exists()
-
-    with per_slide_path.open() as handle:
-        slide_payload = json.load(handle)
-
-    assert slide_payload["schema_version"] == "1.0"
-    assert slide_payload["image"]["width"] == 20
-    assert slide_payload["image"]["height"] == 10
-    assert "Welcome to the lecture." in slide_payload["transcript"]["full_text"]
-    assert slide_payload["ocr"]["final_text"].startswith("refined")
-    assert slide_payload["ocr"]["visual_elements"] == ["arrow"]
+    # Check per-slide markdown (in output root, not slides/)
+    slide1_md = tmp_path / "slide_001.md"
+    assert slide1_md.exists()
+    slide1_content = slide1_md.read_text()
+    assert "---" in slide1_content
+    assert "id: slide_001" in slide1_content
+    assert "index: 1" in slide1_content
+    assert "time_start: 0.0" in slide1_content
+    assert "time_end: 10.0" in slide1_content
+    assert "# Slide 1" in slide1_content
+    assert "Welcome to the lecture." in slide1_content
+    assert "refined" in slide1_content
+    assert "arrow" in slide1_content
 
 
 def test_export_slides_handles_empty_transcript(tmp_path: Path) -> None:
@@ -118,7 +121,7 @@ def test_export_slides_handles_empty_transcript(tmp_path: Path) -> None:
 
     transcript_segments: list[Segment] = []
 
-    output_file = tmp_path / "slides.json"
+    output_file = tmp_path / "index.md"
 
     export_slides_json(
         video_path,
@@ -129,18 +132,14 @@ def test_export_slides_handles_empty_transcript(tmp_path: Path) -> None:
         ocr_pipeline=_StubOcrPipeline(),
     )
 
-    with output_file.open() as handle:
-        manifest = json.load(handle)
+    slide1_md = tmp_path / "slide_001.md"
+    assert slide1_md.exists()
+    content = slide1_md.read_text()
 
-    assert len(manifest["slides"]) == 1
-    slide_entry = manifest["slides"][0]
-    per_slide = tmp_path / slide_entry["json_path"]
-    with per_slide.open() as handle:
-        slide_payload = json.load(handle)
-
-    assert slide_payload["transcript"]["full_text"] == ""
-    assert slide_payload["ocr"]["final_text"] == "refined"
-    assert slide_payload["ocr"]["visual_elements"] == ["arrow"]
+    # With empty transcript, no transcript section
+    assert "## Transcript" not in content or content.count("## Transcript") == 0 or "## Transcript\n\n##" in content
+    assert "refined" in content
+    assert "arrow" in content
 
 
 def test_export_slides_empty_metadata(tmp_path: Path) -> None:
@@ -148,7 +147,7 @@ def test_export_slides_empty_metadata(tmp_path: Path) -> None:
     slide_metadata: list[tuple[int, float, float, Path]] = []
     transcript_segments: list[Segment] = []
 
-    output_file = tmp_path / "slides.json"
+    output_file = tmp_path / "index.md"
 
     export_slides_json(
         video_path,
@@ -159,8 +158,10 @@ def test_export_slides_empty_metadata(tmp_path: Path) -> None:
         ocr_pipeline=_StubOcrPipeline(),
     )
 
-    with output_file.open() as handle:
-        manifest = json.load(handle)
-
-    assert manifest["metadata"]["duration_seconds"] == 0
-    assert len(manifest["slides"]) == 0
+    assert output_file.exists()
+    content = output_file.read_text()
+    assert "# Lecture Slides" in content
+    assert "video.mp4" in content
+    # No slide markdown files in root
+    md_files = list(tmp_path.glob("slide_*.md"))
+    assert len(md_files) == 0
