@@ -137,7 +137,8 @@ def handle_process(args: argparse.Namespace) -> None:
             model=args.model,
             source_url=source_url,
             device=args.device,
-            image_format=getattr(args, 'format', DEFAULT_IMAGE_FORMAT)
+            image_format=getattr(args, 'format', DEFAULT_IMAGE_FORMAT),
+            split_slides=getattr(args, 'split', False)
         )
 
         print("\n" + "=" * 60)
@@ -145,8 +146,8 @@ def handle_process(args: argparse.Namespace) -> None:
         print("=" * 60)
         if 'slides' in result:
             print(f"  Slides:      {len(result['slides'])} images")  # type: ignore
-        if 'index_md' in result:
-            print(f"  index.md:    {result['index_md']}")
+        if 'slides_md' in result:
+            print(f"  Markdown:    {result['slides_md']}")
         print(f"  Output dir:  {result['output_dir']}")
         print("=" * 60)
 
@@ -311,6 +312,11 @@ Examples:
         default=DEFAULT_DEVICE,
         choices=["cpu", "cuda", "auto"],
         help=f"Processing device (default: {DEFAULT_DEVICE} - uses MLX on Apple Silicon if available)"
+    )
+    process_parser.add_argument(
+        "--split",
+        action="store_true",
+        help="Create separate markdown files (index.md + slide_NNN.md) instead of single slides.md"
     )
 
     # Slides command

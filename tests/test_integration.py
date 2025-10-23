@@ -92,25 +92,25 @@ def test_process_video_produces_slides_json(tmp_path: Path, monkeypatch: pytest.
     assert isinstance(slides, list)
     assert len(slides) == 2
 
-    # Check index markdown exists
-    index_md = result.get("index_md")
-    assert isinstance(index_md, Path)
-    assert index_md.exists()
-    index_content = index_md.read_text()
-    assert "# Lecture Slides" in index_content
+    # Check slides markdown exists (default: slides.md combined file)
+    slides_md = result.get("slides_md")
+    assert isinstance(slides_md, Path)
+    assert slides_md.exists()
+    slides_content = slides_md.read_text()
+    assert "# Lecture Slides" in slides_content
 
-    # Check individual slide markdown files
+    # Check combined markdown file contains slides (default mode, no --split)
     output_dir = result.get("output_dir")
     assert isinstance(output_dir, Path)
 
+    # Default mode: single slides.md file
+    assert "## Slide 0" in slides_content
+    assert "Hello" in slides_content
+    assert "refined" in slides_content  # OCR content
+
+    # Should not have separate slide files in default mode
     slide_000_md = output_dir / "slide_000.md"
-    assert slide_000_md.exists()
-    slide_000_content = slide_000_md.read_text()
-    assert "---" in slide_000_content  # YAML frontmatter
-    assert "id: slide_000" in slide_000_content
-    assert "time_start: 0.0" in slide_000_content
-    assert "Hello" in slide_000_content
-    assert "refined" in slide_000_content  # OCR content
+    assert not slide_000_md.exists()
 
 
 def test_cli_process_default_invocation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -118,13 +118,13 @@ def test_cli_process_default_invocation(monkeypatch: pytest.MonkeyPatch, tmp_pat
     output_dir = tmp_path / "cli-out"
 
     def fake_process_video(*_: Any, **__: Any) -> dict[str, Any]:
-        index_md = output_dir / "index.md"
+        slides_md = output_dir / "slides.md"
         output_dir.mkdir(parents=True, exist_ok=True)
-        index_md.write_text('# Lecture Slides')
+        slides_md.write_text('# Lecture Slides')
         return {
             "output_dir": output_dir,
             "slides": [],
-            "index_md": index_md,
+            "slides_md": slides_md,
         }
 
     monkeypatch.setattr("slidegeist.cli.process_video", fake_process_video)

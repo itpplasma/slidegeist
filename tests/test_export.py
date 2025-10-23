@@ -61,6 +61,7 @@ def test_export_slides_manifest_and_payloads(tmp_path: Path) -> None:
         output_file,
         "tiny",
         ocr_pipeline=ocr_pipeline,
+        split_slides=True,
     )
 
     assert output_file.exists()
@@ -114,6 +115,7 @@ def test_export_slides_handles_empty_transcript(tmp_path: Path) -> None:
         output_file,
         "base",
         ocr_pipeline=ocr_pipeline,
+        split_slides=True,
     )
 
     slide1_md = tmp_path / "slide_001.md"
@@ -143,12 +145,13 @@ def test_export_slides_empty_metadata(tmp_path: Path) -> None:
         output_file,
         "tiny",
         ocr_pipeline=ocr_pipeline,
+        split_slides=True,
     )
 
     assert output_file.exists()
     content = output_file.read_text()
     assert "# Lecture Slides" in content
     assert "video.mp4" in content
-    # No slide markdown files in root
+    # No slide markdown files in root (split mode with no slides)
     md_files = list(tmp_path.glob("slide_*.md"))
     assert len(md_files) == 0

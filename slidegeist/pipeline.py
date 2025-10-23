@@ -33,6 +33,7 @@ def process_video(
     image_format: str = DEFAULT_IMAGE_FORMAT,
     skip_slides: bool = False,
     skip_transcription: bool = False,
+    split_slides: bool = False,
     ocr_pipeline: OcrPipeline | None = None,
 ) -> dict[str, Path | list[Path]]:
     """Process a video and return generated artifacts.
@@ -115,19 +116,20 @@ def process_video(
         logger.info("STEP 4: Export slides markdown")
         logger.info("=" * 60)
 
-        index_path = output_dir / "index.md"
+        markdown_path = output_dir / ("index.md" if split_slides else "slides.md")
         if ocr_pipeline is None:
             ocr_pipeline = build_default_ocr_pipeline()
         export_slides_json(
             video_path,
             slide_metadata,
             transcript_segments,
-            index_path,
+            markdown_path,
             model,
             ocr_pipeline=ocr_pipeline,
             source_url=source_url,
+            split_slides=split_slides,
         )
-        results['index_md'] = index_path
+        results['slides_md'] = markdown_path
 
     # Summary
     logger.info("=" * 60)
