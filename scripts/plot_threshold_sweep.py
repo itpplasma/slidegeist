@@ -513,8 +513,7 @@ def main():
             # Define detector configs: (name, threshold_range, step)
             detector_configs = [
                 ('content', (args.pyscene_threshold_min, args.pyscene_threshold_max), args.pyscene_threshold_step),
-                ('histogram', (0.1, 5.0), 0.1),
-                ('hash', (0.2, 0.8), 0.02),
+                ('hash', (0.05, 0.50), 0.01),
             ]
 
             for detector_name, threshold_range, threshold_step in detector_configs:
