@@ -225,8 +225,16 @@ def _build_slide_section(
         "",
     ]
 
+    if transcript_text:
+        lines.extend([
+            "### Transcript",
+            "",
+            transcript_text,
+            "",
+        ])
+
     if ocr_text or visual_elements:
-        lines.append("**Slide Content:**")
+        lines.append("### Slide Content")
         lines.append("")
         if ocr_text:
             lines.extend([ocr_text, ""])
@@ -234,14 +242,6 @@ def _build_slide_section(
             elements_str = ", ".join(visual_elements)
             lines.append(f"*Visual Elements:* {elements_str}")
             lines.append("")
-
-    if transcript_text:
-        lines.extend([
-            "**Transcript:**",
-            "",
-            transcript_text,
-            "",
-        ])
 
     lines.append("---")
     lines.append("")
