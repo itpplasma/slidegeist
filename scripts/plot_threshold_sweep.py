@@ -370,9 +370,10 @@ def plot_sweep(
         ax.axhspan(lower, upper, alpha=0.1, color='green', label='±20% range')
 
     ax.set_xlabel('Normalized Threshold (0=min sensitivity, 1=max sensitivity)', fontsize=12)
-    ax.set_ylabel('Number of Slides', fontsize=12)
+    ax.set_ylabel('Number of Slides (log scale)', fontsize=12)
+    ax.set_yscale('log')
     ax.set_title(f'Threshold Sweep Comparison: {video_name}', fontsize=14, fontweight='bold')
-    ax.grid(True, alpha=0.3)
+    ax.grid(True, alpha=0.3, which='both')
     ax.legend(loc='upper right', fontsize=9)
 
     plt.tight_layout()
