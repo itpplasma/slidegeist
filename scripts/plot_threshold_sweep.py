@@ -16,6 +16,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+# Import labeled videos from test file
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from tests.test_labeled_videos import LABELED_VIDEOS, get_video_path, download_video
+
 # Minimal plotting - works without matplotlib
 try:
     import matplotlib.pyplot as plt
@@ -406,8 +410,8 @@ def plot_sweep(
 
     plt.tight_layout()
 
-    # Save plot
-    output_path = Path('threshold_sweep.png')
+    # Save plot with video-specific filename
+    output_path = Path(f'threshold_sweep_{video_name}.png')
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     print(f"\nPlot saved to: {output_path}")
 
@@ -468,10 +472,19 @@ def main():
     parser = argparse.ArgumentParser(
         description="Plot threshold sweep diagnostic for slide detection"
     )
-    parser.add_argument("video", type=Path, help="Path to video file")
+    parser.add_argument(
+        "video",
+        nargs="?",
+        help="Video name from labeled list OR path to video file (optional if --all is used)"
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Generate plots for all labeled videos"
+    )
     parser.add_argument(
         "--expected-slides", "-e", type=int,
-        help="Expected number of slides (for comparison)"
+        help="Expected number of slides (for comparison, only used with explicit path)"
     )
     parser.add_argument(
         "--threshold-min", type=float, default=0.01,
@@ -504,63 +517,91 @@ def main():
 
     args = parser.parse_args()
 
-    if not args.video.exists():
-        print(f"Error: Video not found: {args.video}")
+    # Determine which videos to process
+    videos_to_process = []
+
+    if args.all:
+        # Process all labeled videos
+        for labeled_video in LABELED_VIDEOS:
+            video_path = download_video(labeled_video)
+            videos_to_process.append((video_path, labeled_video.slide_count, labeled_video.name))
+    elif args.video:
+        # Check if video is a labeled video name
+        labeled_video = next((v for v in LABELED_VIDEOS if v.name == args.video), None)
+        if labeled_video:
+            video_path = download_video(labeled_video)
+            videos_to_process.append((video_path, labeled_video.slide_count, labeled_video.name))
+        else:
+            # Treat as file path
+            video_path = Path(args.video)
+            if not video_path.exists():
+                print(f"Error: Video not found: {video_path}")
+                sys.exit(1)
+            videos_to_process.append((video_path, args.expected_slides, video_path.stem))
+    else:
+        print("Error: Must provide video name/path or use --all")
+        parser.print_help()
         sys.exit(1)
 
-    # Compute frame differences for slidegeist
-    frame_diffs, working_fps = compute_frame_diffs(args.video)
+    # Process each video
+    for video_path, expected_slides, video_name in videos_to_process:
+        print(f"\n{'='*80}")
+        print(f"Processing: {video_name}")
+        print(f"{'='*80}\n")
 
-    # Sweep thresholds for slidegeist
-    global threshold_range
-    threshold_range = (args.threshold_min, args.threshold_max)
-    thresholds, slide_counts = sweep_thresholds(
-        frame_diffs,
-        working_fps,
-        threshold_range=threshold_range,
-        threshold_step=args.threshold_step
-    )
+        # Compute frame differences for slidegeist
+        frame_diffs, working_fps = compute_frame_diffs(video_path)
 
-    # Print text summary for slidegeist
-    print_text_summary(thresholds, slide_counts, args.expected_slides)
-
-    # Optionally run PySceneDetect comparison
-    pyscene_results = []
-    if args.compare_pyscenedetect:
-        if not HAS_PYSCENEDETECT:
-            print("\nWarning: PySceneDetect not installed. Install with: pip install scenedetect[opencv]")
-        else:
-            # Define detector configs: (name, threshold_range, step)
-            detector_configs = [
-                ('content', (args.pyscene_threshold_min, args.pyscene_threshold_max), args.pyscene_threshold_step),
-                ('hash', (0.10, 0.50), 0.01),
-            ]
-
-            for detector_name, threshold_range, threshold_step in detector_configs:
-                try:
-                    score_vals, pyscene_fps, metric_key = compute_pyscenedetect_scores(args.video, detector_name)
-                    pyscene_thresholds, pyscene_counts = sweep_pyscenedetect_thresholds(
-                        score_vals,
-                        pyscene_fps,
-                        threshold_range=threshold_range,
-                        threshold_step=threshold_step
-                    )
-                    pyscene_results.append((detector_name, pyscene_thresholds, pyscene_counts))
-                    print(f"PySceneDetect {detector_name} sweep complete: {len(pyscene_thresholds)} thresholds tested")
-                except Exception as e:
-                    print(f"\nWarning: PySceneDetect {detector_name} comparison failed: {e}")
-
-    # Plot if matplotlib available
-    if HAS_MATPLOTLIB:
-        plot_sweep(
-            thresholds,
-            slide_counts,
-            args.expected_slides,
-            args.video.name,
-            pyscene_results if pyscene_results else None
+        # Sweep thresholds for slidegeist
+        global threshold_range
+        threshold_range = (args.threshold_min, args.threshold_max)
+        thresholds, slide_counts = sweep_thresholds(
+            frame_diffs,
+            working_fps,
+            threshold_range=threshold_range,
+            threshold_step=args.threshold_step
         )
-    else:
-        print("\nInstall matplotlib to see plot: pip install matplotlib")
+
+        # Print text summary for slidegeist
+        print_text_summary(thresholds, slide_counts, expected_slides)
+
+        # Optionally run PySceneDetect comparison
+        pyscene_results = []
+        if args.compare_pyscenedetect:
+            if not HAS_PYSCENEDETECT:
+                print("\nWarning: PySceneDetect not installed. Install with: pip install scenedetect[opencv]")
+            else:
+                # Define detector configs: (name, threshold_range, step)
+                detector_configs = [
+                    ('content', (args.pyscene_threshold_min, args.pyscene_threshold_max), args.pyscene_threshold_step),
+                    ('hash', (0.10, 0.50), 0.01),
+                ]
+
+                for detector_name, threshold_range_det, threshold_step in detector_configs:
+                    try:
+                        score_vals, pyscene_fps, metric_key = compute_pyscenedetect_scores(video_path, detector_name)
+                        pyscene_thresholds, pyscene_counts = sweep_pyscenedetect_thresholds(
+                            score_vals,
+                            pyscene_fps,
+                            threshold_range=threshold_range_det,
+                            threshold_step=threshold_step
+                        )
+                        pyscene_results.append((detector_name, pyscene_thresholds, pyscene_counts))
+                        print(f"PySceneDetect {detector_name} sweep complete: {len(pyscene_thresholds)} thresholds tested")
+                    except Exception as e:
+                        print(f"\nWarning: PySceneDetect {detector_name} comparison failed: {e}")
+
+        # Plot if matplotlib available
+        if HAS_MATPLOTLIB:
+            plot_sweep(
+                thresholds,
+                slide_counts,
+                expected_slides,
+                video_name,
+                pyscene_results if pyscene_results else None
+            )
+        else:
+            print("\nInstall matplotlib to see plot: pip install matplotlib")
 
 
 if __name__ == "__main__":
