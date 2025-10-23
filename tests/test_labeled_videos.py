@@ -22,10 +22,16 @@ class LabeledVideo(NamedTuple):
 # Test videos with known slide counts
 LABELED_VIDEOS = [
     LabeledVideo(
-        name="tugraz_presentation",
+        name="tugraz_presentation_15",
         url="https://tube.tugraz.at/portal/watch/53ceb6bf-bc16-4212-8fe6-a6080f7e3d79",
         slide_count=15,
         notes="TU Graz presentation with 15 labeled slides",
+    ),
+    LabeledVideo(
+        name="tugraz_presentation_30",
+        url="https://tube.tugraz.at/portal/watch/4bb83577-3a97-4832-90ac-3d72600336a4",
+        slide_count=30,
+        notes="TU Graz presentation with 30 labeled slides",
     ),
 ]
 
