@@ -84,8 +84,9 @@ slidegeist video.mp4 --device cuda
 # Use smaller/faster model
 slidegeist video.mp4 --model base
 
-# Adjust scene detection sensitivity (0.0-1.0, default 0.025)
-# Lower values detect more subtle changes, higher values only major transitions
+# Adjust scene detection sensitivity (0.0-1.0, default 0.025).
+# Acts as the *starting point* for the Opencast optimizer.
+# Lower values bias toward more segments; higher values toward fewer.
 slidegeist video.mp4 --scene-threshold 0.015
 
 # Explicit process command (same as default)
@@ -107,7 +108,9 @@ slidegeist {process,slides} <video> [options]
 
 Options:
   --out DIR              Output directory (default: video filename)
-  --scene-threshold NUM  Scene detection sensitivity 0.0-1.0 (default: 0.025)
+  --scene-threshold NUM  Initial scene detection sensitivity 0.0-1.0 (default: 0.025)
+                         Used as the optimizer's starting threshold; it will
+                         auto-adjust to reach a stable segment count.
   --model NAME          Whisper model: tiny, base, small, medium, large, large-v2, large-v3
                         (default: large-v3)
   --device NAME         Device: cpu, cuda, or auto (default: auto)
@@ -153,6 +156,7 @@ JSON file with slides grouped by their transcripts:
 
 1. **Scene Detection**: Uses FFmpeg's scene filter (SAD-based) with an Opencast-style optimizer to identify slide changes
    - Iteratively adjusts the scene threshold to target ~30 segments per hour (typical slide pace)
+   - Treats `--scene-threshold` as the *initial* threshold; the optimizer raises or lowers it until the slide count converges
    - Merges segments shorter than 2 seconds to suppress rapid flickers
    - Based on Opencast's VideoSegmenterService implementation
 2. **Slide Extraction**: Extracts the final frame before each scene change using FFmpeg
@@ -175,7 +179,14 @@ JSON file with slides grouped by their transcripts:
 
 ## Limitations
 
-- Scene detection may need threshold tuning for some videos (default 0.025 works well for most lectures, try 0.015 for maximum sensitivity or 0.03+ for only major transitions)
+- Scene detection may need threshold tuning for some videos (default 0.025 works well for most lectures; because the optimizer auto-adjusts, use lower values like 0.015 to bias toward more slides or 0.03+ to bias toward fewer major transitions)
+
+### Advanced Threshold Tuning
+
+- The Opencast optimizer targets roughly 30 segments per hour. That goal works well for standard lectures but you can steer it:
+  - Lower `--scene-threshold` to encourage more segments before optimization. Useful when the optimizer consistently undershoots the actual slide count.
+  - Raise `--scene-threshold` to bias toward fewer segments when the optimizer overshoots and splits slides too often.
+- `--scene-threshold` is still bounded between 0.0 and 1.0. Values outside this range will be rejected by the CLI validator.
 - No speaker diarization
 - No automatic slide deduplication
 
