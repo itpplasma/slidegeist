@@ -243,8 +243,8 @@ def compute_pyscenedetect_scores(video_path: Path) -> tuple[list[float], float]:
 def sweep_pyscenedetect_thresholds(
     content_vals: list[float],
     fps: float,
-    threshold_range: tuple[float, float] = (5.0, 50.0),
-    threshold_step: float = 1.0,
+    threshold_range: tuple[float, float] = (1.0, 25.0),
+    threshold_step: float = 0.5,
     min_scene_len: float = 2.0,
     start_offset: float = 3.0
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -421,16 +421,16 @@ def main():
         help="Also run PySceneDetect ContentDetector for comparison"
     )
     parser.add_argument(
-        "--pyscene-threshold-min", type=float, default=5.0,
-        help="Minimum threshold for PySceneDetect (default: 5.0)"
+        "--pyscene-threshold-min", type=float, default=1.0,
+        help="Minimum threshold for PySceneDetect (default: 1.0)"
     )
     parser.add_argument(
-        "--pyscene-threshold-max", type=float, default=50.0,
-        help="Maximum threshold for PySceneDetect (default: 50.0)"
+        "--pyscene-threshold-max", type=float, default=25.0,
+        help="Maximum threshold for PySceneDetect (default: 25.0)"
     )
     parser.add_argument(
-        "--pyscene-threshold-step", type=float, default=1.0,
-        help="Threshold step size for PySceneDetect (default: 1.0)"
+        "--pyscene-threshold-step", type=float, default=0.5,
+        help="Threshold step size for PySceneDetect (default: 0.5)"
     )
 
     args = parser.parse_args()
