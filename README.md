@@ -84,9 +84,9 @@ slidegeist video.mp4 --device cuda
 # Use smaller/faster model
 slidegeist video.mp4 --model base
 
-# Adjust scene detection sensitivity (0.0-1.0, default 0.03)
+# Adjust scene detection sensitivity (0.0-1.0, default 0.02)
 # Lower values detect more subtle changes, higher values only major transitions
-slidegeist video.mp4 --scene-threshold 0.02
+slidegeist video.mp4 --scene-threshold 0.015
 
 # Explicit process command (same as default)
 slidegeist process video.mp4
@@ -107,7 +107,7 @@ slidegeist {process,slides} <video> [options]
 
 Options:
   --out DIR              Output directory (default: video filename)
-  --scene-threshold NUM  Scene detection sensitivity 0.0-1.0 (default: 0.03)
+  --scene-threshold NUM  Scene detection sensitivity 0.0-1.0 (default: 0.02)
   --model NAME          Whisper model: tiny, base, small, medium, large, large-v2, large-v3
                         (default: large-v3)
   --device NAME         Device: cpu, cuda, or auto (default: auto)
@@ -175,7 +175,7 @@ JSON file with slides grouped by their transcripts:
 
 ## Limitations
 
-- Scene detection may need threshold tuning for some videos (default 0.03 works well for most lectures, try 0.02 for higher sensitivity or 0.05+ for only major transitions)
+- Scene detection may need threshold tuning for some videos (default 0.02 works well for most lectures, try 0.015 for maximum sensitivity or 0.03+ for only major transitions)
 - No speaker diarization
 - No automatic slide deduplication
 

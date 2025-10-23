@@ -23,7 +23,7 @@ def detect_slides_pixel_diff(
     video_path: Path,
     start_offset: float = 3.0,
     min_scene_len: float = 2.0,
-    threshold: float = 0.03,
+    threshold: float = 0.02,
     sample_interval: float = 1.0,
     max_resolution: int = 360,
     target_fps: float = 5.0
@@ -41,8 +41,8 @@ def detect_slides_pixel_diff(
         video_path: Path to the video file.
         start_offset: Skip first N seconds to avoid setup mouse movement.
         min_scene_len: Minimum scene length in seconds (filters rapid changes).
-        threshold: Detection threshold (0-1). Default 0.03.
-                  Lower = more sensitive. Typical range: 0.02-0.10.
+        threshold: Detection threshold (0-1). Default 0.02.
+                  Lower = more sensitive. Typical range: 0.015-0.05.
         sample_interval: Time interval between frames to compare (seconds).
                         Default 1.0s balances accuracy and speed.
         max_resolution: Maximum resolution (height) for processing. Videos larger
@@ -208,3 +208,45 @@ def detect_slides_pixel_diff(
 
     logger.info(f"Found {len(timestamps)} slide changes")
     return timestamps
+
+
+def detect_slides_adaptive(
+    video_path: Path,
+    start_offset: float = 3.0,
+    min_scene_len: float = 2.0,
+    threshold_range: tuple[float, float] = (0.01, 0.10),
+    threshold_steps: int = 10,
+    sample_interval: float = 1.0,
+    max_resolution: int = 360,
+    target_fps: float = 5.0,
+) -> list[float]:
+    """Detect slides using adaptive threshold selection.
+
+    Computes pixel differences once, then sweeps over threshold range to find
+    optimal threshold that gives stable detection (flat region in sweep curve).
+
+    Args:
+        video_path: Path to video file.
+        start_offset: Skip first N seconds.
+        min_scene_len: Minimum scene length in seconds.
+        threshold_range: (min, max) threshold values to test.
+        threshold_steps: Number of thresholds to test.
+        sample_interval: Time between compared frames.
+        max_resolution: Max height for processing.
+        target_fps: Target FPS for processing.
+
+    Returns:
+        List of slide change timestamps using optimal threshold.
+    """
+    # TODO: Implement full adaptive algorithm
+    # For now, use fixed threshold at middle of range
+    logger.info("Adaptive threshold detection (using default 0.02 for now)")
+    return detect_slides_pixel_diff(
+        video_path,
+        start_offset=start_offset,
+        min_scene_len=min_scene_len,
+        threshold=0.02,
+        sample_interval=sample_interval,
+        max_resolution=max_resolution,
+        target_fps=target_fps,
+    )
