@@ -329,32 +329,31 @@ def plot_sweep(
 
     fig, ax = plt.subplots(figsize=(14, 7))
 
-    # Plot our method (slidegeist)
-    ax.plot(thresholds, slide_counts, 'b-', linewidth=2.5, label='slidegeist (binary pixel diff)', zorder=10)
+    # Plot our method (slidegeist) - already in 0-1 range
+    ax.plot(thresholds, slide_counts, 'b-', linewidth=2.5, label='slidegeist (binary pixel diff, 0-1)', zorder=10)
     ax.scatter(thresholds, slide_counts, c='blue', s=30, alpha=0.6, zorder=10)
 
-    # Plot PySceneDetect methods if available
+    # Plot PySceneDetect methods if available - normalize their thresholds to 0-1
     colors = ['red', 'orange', 'purple']
     if pyscene_results:
-        # Create second x-axis for PySceneDetect (different scale)
-        ax2 = ax.twiny()
-
         for idx, (detector_name, pyscene_thresholds, pyscene_counts) in enumerate(pyscene_results):
             color = colors[idx % len(colors)]
+
+            # Normalize thresholds to 0-1 range
+            thresh_min = pyscene_thresholds.min()
+            thresh_max = pyscene_thresholds.max()
+            normalized_thresholds = (pyscene_thresholds - thresh_min) / (thresh_max - thresh_min)
+
             label_map = {
-                'content': 'PySceneDetect ContentDetector (HSV)',
-                'histogram': 'PySceneDetect HistogramDetector (YUV)',
-                'hash': 'PySceneDetect HashDetector (perceptual hash)'
+                'content': f'PySceneDetect ContentDetector (HSV, {thresh_min:.1f}-{thresh_max:.1f})',
+                'histogram': f'PySceneDetect HistogramDetector (YUV, {thresh_min:.1f}-{thresh_max:.1f})',
+                'hash': f'PySceneDetect HashDetector (pHash, {thresh_min:.2f}-{thresh_max:.2f})'
             }
             label = label_map.get(detector_name, detector_name)
 
-            ax2.plot(pyscene_thresholds, pyscene_counts, color=color, linestyle='-',
+            ax.plot(normalized_thresholds, pyscene_counts, color=color, linestyle='-',
                     linewidth=2, label=label, alpha=0.8)
-            ax2.scatter(pyscene_thresholds, pyscene_counts, c=color, s=20, alpha=0.5)
-
-        ax2.set_xlabel('PySceneDetect Threshold', fontsize=12, color='darkred')
-        ax2.tick_params(axis='x', labelcolor='darkred')
-        ax2.legend(loc='upper right', fontsize=9)
+            ax.scatter(normalized_thresholds, pyscene_counts, c=color, s=20, alpha=0.5)
 
     # Mark expected slide count if provided
     if expected_slides:
@@ -365,24 +364,11 @@ def plot_sweep(
         upper = expected_slides * 1.2
         ax.axhspan(lower, upper, alpha=0.1, color='green', label='±20% range')
 
-    ax.set_xlabel('slidegeist Threshold (0-1 normalized pixel diff)', fontsize=12)
+    ax.set_xlabel('Normalized Threshold (0=min sensitivity, 1=max sensitivity)', fontsize=12)
     ax.set_ylabel('Number of Slides', fontsize=12)
     ax.set_title(f'Threshold Sweep Comparison: {video_name}', fontsize=14, fontweight='bold')
     ax.grid(True, alpha=0.3)
-    ax.legend(loc='upper left', fontsize=10)
-
-    # Add vertical lines at common thresholds for our method
-    for t, label in [(0.01, '0.01'), (0.02, '0.02'), (0.03, '0.03'), (0.05, '0.05'), (0.10, '0.10')]:
-        if thresholds[0] <= t <= thresholds[-1]:
-            ax.axvline(x=t, color='blue', linestyle=':', alpha=0.3)
-            idx = np.argmin(np.abs(thresholds - t))
-            ax.annotate(f'{label}\n({slide_counts[idx]} slides)',
-                       xy=(t, slide_counts[idx]),
-                       xytext=(5, 5),
-                       textcoords='offset points',
-                       fontsize=7,
-                       alpha=0.7,
-                       color='blue')
+    ax.legend(loc='upper right', fontsize=9)
 
     plt.tight_layout()
 
@@ -513,7 +499,7 @@ def main():
             # Define detector configs: (name, threshold_range, step)
             detector_configs = [
                 ('content', (args.pyscene_threshold_min, args.pyscene_threshold_max), args.pyscene_threshold_step),
-                ('hash', (0.05, 0.50), 0.01),
+                ('hash', (0.10, 0.50), 0.01),
             ]
 
             for detector_name, threshold_range, threshold_step in detector_configs:
