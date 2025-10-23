@@ -130,7 +130,7 @@ def handle_process(args: argparse.Namespace) -> None:
 
         result = process_video(
             video_path=video_path,
-            output_dir=args.out,
+            output_dir=output_dir,
             scene_threshold=args.scene_threshold,
             min_scene_len=args.min_scene_len,
             start_offset=args.start_offset,
@@ -183,7 +183,7 @@ def handle_slides(args: argparse.Namespace) -> None:
 
         result = process_slides_only(
             video_path=video_path,
-            output_dir=args.out,
+            output_dir=output_dir,
             scene_threshold=args.scene_threshold,
             min_scene_len=args.min_scene_len,
             start_offset=args.start_offset,
