@@ -23,12 +23,15 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_video_path(
-    input_str: str, cookies_from_browser: BrowserType | None = None
+    input_str: str,
+    output_dir: Path,
+    cookies_from_browser: BrowserType | None = None
 ) -> Path:
     """Resolve input to video path, downloading if URL.
 
     Args:
         input_str: Video file path or URL.
+        output_dir: Output directory to store downloaded video.
         cookies_from_browser: Browser to extract cookies from for authenticated downloads.
 
     Returns:
@@ -36,7 +39,7 @@ def resolve_video_path(
     """
     if is_url(input_str):
         logger.info(f"Detected URL input: {input_str}")
-        return download_video(input_str, cookies_from_browser=cookies_from_browser)
+        return download_video(input_str, output_dir=output_dir, cookies_from_browser=cookies_from_browser)
     return Path(input_str)
 
 
@@ -107,8 +110,20 @@ def handle_process(args: argparse.Namespace) -> None:
         check_prerequisites()
         validate_scene_threshold(args.scene_threshold)
 
+        # Determine output directory early (before download)
+        output_dir = args.out
+        if output_dir == Path(DEFAULT_OUTPUT_DIR):
+            # Need to determine from input
+            if is_url(args.input):
+                # For URLs, we'll use video filename after downloading
+                # Pass None temporarily and resolve in process_video
+                output_dir = args.out
+            else:
+                # For local files, use video filename immediately
+                output_dir = Path.cwd() / Path(args.input).stem
+
         video_path = resolve_video_path(
-            args.input, getattr(args, 'cookies_from_browser', None)
+            args.input, output_dir, getattr(args, 'cookies_from_browser', None)
         )
 
         source_url = args.input if args.input.startswith(('http://', 'https://')) else None
@@ -152,8 +167,16 @@ def handle_slides(args: argparse.Namespace) -> None:
         check_prerequisites()
         validate_scene_threshold(args.scene_threshold)
 
+        # Determine output directory early (before download)
+        output_dir = args.out
+        if output_dir == Path(DEFAULT_OUTPUT_DIR):
+            if is_url(args.input):
+                output_dir = args.out
+            else:
+                output_dir = Path.cwd() / Path(args.input).stem
+
         video_path = resolve_video_path(
-            args.input, getattr(args, 'cookies_from_browser', None)
+            args.input, output_dir, getattr(args, 'cookies_from_browser', None)
         )
 
         result = process_slides_only(

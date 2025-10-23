@@ -41,14 +41,65 @@ def translate_url(url: str) -> str:
     return url
 
 
+def check_existing_video(url: str, output_dir: Path, cookies_from_browser: BrowserType | None = None) -> Path | None:
+    """Check if video from URL already exists in output directory.
+
+    Args:
+        url: Video URL.
+        output_dir: Directory to check for existing video.
+        cookies_from_browser: Browser to extract cookies from (needed for metadata extraction).
+
+    Returns:
+        Path to existing video file if found, None otherwise.
+    """
+    if not output_dir.exists():
+        return None
+
+    # Translate URL first
+    url = translate_url(url)
+
+    # Extract video metadata without downloading
+    ydl_opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": False,
+    }
+
+    if cookies_from_browser:
+        ydl_opts["cookiesfrombrowser"] = (cookies_from_browser,)
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            if info is None:
+                return None
+
+            # Construct expected filename
+            sanitized_title = ydl.prepare_filename(info)
+            expected_filename = Path(sanitized_title).name
+
+            # Check if file exists in output directory
+            potential_path = output_dir / expected_filename
+            if potential_path.exists():
+                logger.info(f"Found existing video: {potential_path}")
+                return potential_path
+
+    except Exception as e:
+        logger.debug(f"Could not check for existing video: {e}")
+        return None
+
+    return None
+
+
 def download_video(
     url: str,
     output_dir: Path | None = None,
     cookies_from_browser: BrowserType | None = None
 ) -> Path:
-    """Download video from URL using yt-dlp.
+    """Download video from URL using yt-dlp, or reuse if already downloaded.
 
     Supports YouTube, Mediasite, TU Graz Tube, and many other platforms.
+    If output_dir is specified and video already exists there, reuses it.
 
     Args:
         url: Video URL to download.
@@ -58,7 +109,7 @@ def download_video(
             Supports: firefox, safari, chrome, chromium, edge, opera, brave.
 
     Returns:
-        Path to the downloaded video file.
+        Path to the downloaded (or existing) video file.
 
     Raises:
         ValueError: If video information cannot be extracted from URL.
@@ -79,6 +130,12 @@ def download_video(
         output_dir = Path(tempfile.mkdtemp(prefix="slidegeist_"))
     else:
         output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Check if video already exists
+        existing = check_existing_video(url, output_dir, cookies_from_browser)
+        if existing:
+            logger.info(f"Reusing existing video: {existing}")
+            return existing
 
     # Template for output filename: use video title, sanitized
     output_template = str(output_dir / "%(title)s.%(ext)s")
