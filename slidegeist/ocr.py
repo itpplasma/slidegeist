@@ -149,12 +149,13 @@ class TesseractExtractor:
         from pytesseract import Output  # type: ignore[attr-defined]
 
         # Use both English and German for multilingual support
-        # PSM 3 = Fully automatic page segmentation (better for slides with multiple blocks)
+        # PSM 1 = Automatic page segmentation with OSD (orientation and script detection)
+        # Best for slides with multiple blocks and varying orientations
         data = pytesseract.image_to_data(
             str(image_path),
             lang='eng+deu',
             output_type=Output.DICT,
-            config="--psm 3",
+            config="--psm 1",
         )
 
         blocks: List[Dict[str, Any]] = []
