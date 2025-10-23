@@ -96,7 +96,7 @@ def validate_scene_threshold(threshold: float) -> None:
         logger.error("Scene threshold must be between 0.0 and 1.0")
         logger.error("  Lower values = more sensitive (detect subtle changes)")
         logger.error("  Higher values = less sensitive (only major transitions)")
-        logger.error(f"  Recommended range: 0.02-0.15 (default: {DEFAULT_SCENE_THRESHOLD})")
+        logger.error(f"  Recommended range: 0.02-0.10 (default: {DEFAULT_SCENE_THRESHOLD})")
         sys.exit(1)
 
 

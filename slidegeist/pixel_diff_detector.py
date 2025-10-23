@@ -23,7 +23,7 @@ def detect_slides_pixel_diff(
     video_path: Path,
     start_offset: float = 3.0,
     min_scene_len: float = 2.0,
-    threshold: float = 0.10,
+    threshold: float = 0.03,
     sample_interval: float = 1.0,
     max_resolution: int = 360,
     target_fps: float = 5.0
@@ -41,8 +41,8 @@ def detect_slides_pixel_diff(
         video_path: Path to the video file.
         start_offset: Skip first N seconds to avoid setup mouse movement.
         min_scene_len: Minimum scene length in seconds (filters rapid changes).
-        threshold: Detection threshold (0-1). Default 0.10.
-                  Lower = more sensitive. Typical range: 0.05-0.20.
+        threshold: Detection threshold (0-1). Default 0.03.
+                  Lower = more sensitive. Typical range: 0.02-0.10.
         sample_interval: Time interval between frames to compare (seconds).
                         Default 1.0s balances accuracy and speed.
         max_resolution: Maximum resolution (height) for processing. Videos larger

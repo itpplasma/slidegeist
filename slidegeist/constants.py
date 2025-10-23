@@ -1,8 +1,8 @@
 """Constants used across the slidegeist package."""
 
 # Scene detection - Global Pixel Difference (research-proven best method)
-DEFAULT_SCENE_THRESHOLD = 0.10  # Normalized pixel difference threshold (0-1 scale)
-                                # Lower = more sensitive. Typical range: 0.05-0.20
+DEFAULT_SCENE_THRESHOLD = 0.03  # Normalized pixel difference threshold (0-1 scale)
+                                # Lower = more sensitive. Typical range: 0.02-0.10
 DEFAULT_MIN_SCENE_LEN = 2.0  # Minimum scene length in seconds
 DEFAULT_START_OFFSET = 3.0  # Skip first N seconds to avoid mouse movement during setup
 
