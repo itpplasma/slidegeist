@@ -9,11 +9,9 @@ DEFAULT_MIN_SCENE_LEN = 2.0  # Minimum segment length in seconds (stability thre
                              # Opencast default: 60s, adapted to 2s for slide detection
 DEFAULT_START_OFFSET = 3.0  # Skip first N seconds to avoid mouse movement during setup
 
-# Opencast optimization parameters (using segments per hour like Opencast can)
+# Opencast optimization parameters (target slides/hour mirrors Opencast default)
 # Research shows typical presentations have 15-45 slides/hour, 30 is a good middle ground
 DEFAULT_SEGMENTS_PER_HOUR = 30  # Target segments per hour (matches typical presentation pace)
-DEFAULT_MAX_SEGMENTS_PER_HOUR = 150   # Maximum allowed segments per hour
-DEFAULT_MIN_SEGMENTS_PER_HOUR = 3     # Minimum required segments per hour (at least 1 per 20 min)
 DEFAULT_MAX_ERROR = 0.25     # Maximum error tolerance (25%, Opencast default)
 DEFAULT_MAX_CYCLES = 3       # Maximum optimization iterations (Opencast default)
 
