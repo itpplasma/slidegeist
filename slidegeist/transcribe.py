@@ -2,6 +2,8 @@
 
 import logging
 import platform
+import sys
+import time
 from pathlib import Path
 from typing import TypedDict
 
@@ -30,7 +32,8 @@ def is_mlx_available() -> bool:
 
     # Try importing mlx-whisper
     try:
-        import mlx_whisper  # type: ignore[import-untyped]  # noqa: F401
+        import mlx_whisper  # type: ignore[import-untyped, import-not-found]  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -38,6 +41,7 @@ def is_mlx_available() -> bool:
 
 class Word(TypedDict):
     """A single word with timing information."""
+
     word: str
     start: float
     end: float
@@ -45,6 +49,7 @@ class Word(TypedDict):
 
 class Segment(TypedDict):
     """A transcript segment with timing and words."""
+
     start: float
     end: float
     text: str
@@ -53,6 +58,7 @@ class Segment(TypedDict):
 
 class TranscriptResult(TypedDict):
     """Complete transcription result."""
+
     language: str
     segments: list[Segment]
 
@@ -61,7 +67,7 @@ def transcribe_video(
     video_path: Path,
     model_size: str = DEFAULT_WHISPER_MODEL,
     device: str = DEFAULT_DEVICE,
-    compute_type: str = "int8"
+    compute_type: str = "int8",
 ) -> TranscriptResult:
     """Transcribe video audio using faster-whisper.
 
@@ -82,9 +88,7 @@ def transcribe_video(
     try:
         from faster_whisper import WhisperModel  # type: ignore[import-untyped]
     except ImportError:
-        raise ImportError(
-            "faster-whisper not installed. Install with: pip install faster-whisper"
-        )
+        raise ImportError("faster-whisper not installed. Install with: pip install faster-whisper")
 
     if not video_path.exists():
         raise FileNotFoundError(f"Video file not found: {video_path}")
@@ -98,7 +102,9 @@ def transcribe_video(
             logger.info("MLX detected - using MLX-optimized Whisper for Apple Silicon")
         elif platform.system() == "Darwin" and platform.machine() == "arm64":
             device = "cpu"
-            logger.info("Apple Silicon detected but MLX not available, using CPU. Install with: pip install mlx-whisper")
+            logger.info(
+                "Apple Silicon detected but MLX not available, using CPU. Install with: pip install mlx-whisper"
+            )
         else:
             device = "cpu"
             logger.info("Auto-detected device: CPU")
@@ -135,22 +141,19 @@ def transcribe_video(
             for segment in result.get("segments", []):
                 mlx_words: list[Word] = []
                 for word in segment.get("words", []):
-                    mlx_words.append({
-                        "word": word["word"],
-                        "start": word["start"],
-                        "end": word["end"]
-                    })
-                mlx_segments.append({
-                    "start": segment["start"],
-                    "end": segment["end"],
-                    "text": segment["text"].strip(),
-                    "words": mlx_words
-                })
+                    mlx_words.append(
+                        {"word": word["word"], "start": word["start"], "end": word["end"]}
+                    )
+                mlx_segments.append(
+                    {
+                        "start": segment["start"],
+                        "end": segment["end"],
+                        "text": segment["text"].strip(),
+                        "words": mlx_words,
+                    }
+                )
             logger.info(f"MLX transcription complete: {len(mlx_segments)} segments")
-            return {
-                "language": result.get("language", "unknown"),
-                "segments": mlx_segments
-            }
+            return {"language": result.get("language", "unknown"), "segments": mlx_segments}
         except Exception as e:
             logger.warning(f"MLX transcription failed ({e}), falling back to faster-whisper")
             use_mlx = False
@@ -159,10 +162,37 @@ def transcribe_video(
     if device == "cuda" and compute_type == "int8":
         compute_type = "float16"
 
+    # Use all available CPU cores (0 = auto-detect optimal number)
+    # This overrides the default of 4 threads
+    cpu_threads = 0
+    num_workers = 1
+
     logger.info(f"Loading Whisper model: {model_size} on {device}")
-    model = WhisperModel(model_size, device=device, compute_type=compute_type)
+    logger.info(f"CPU threads: auto-detect (all cores), num_workers: {num_workers}")
+
+    model = WhisperModel(
+        model_size,
+        device=device,
+        compute_type=compute_type,
+        cpu_threads=cpu_threads,
+        num_workers=num_workers,
+    )
+
+    # Get video duration for progress tracking
+    from slidegeist.ffmpeg import get_video_duration
+
+    try:
+        video_duration = get_video_duration(video_path)
+        logger.info(
+            f"Video duration: {video_duration / 60:.1f} minutes ({video_duration:.1f} seconds)"
+        )
+    except Exception:
+        video_duration = None
+        logger.warning("Could not determine video duration, progress tracking will be limited")
 
     logger.info(f"Transcribing: {video_path.name}")
+    start_time = time.time()
+
     segments_iterator, info = model.transcribe(
         str(video_path),
         word_timestamps=True,
@@ -172,28 +202,84 @@ def transcribe_video(
         no_speech_threshold=NO_SPEECH_THRESHOLD,
     )
 
-    # Convert iterator to list and extract data
+    # Convert iterator to list and extract data with progress tracking
     segments_list: list[Segment] = []
+    last_progress_time = start_time
+    progress_interval = 5.0  # Update progress every 5 seconds
+
     for segment in segments_iterator:
         words_list: list[Word] = []
         if segment.words:
             for word in segment.words:
-                words_list.append({
-                    "word": word.word,
-                    "start": word.start,
-                    "end": word.end
-                })
+                words_list.append({"word": word.word, "start": word.start, "end": word.end})
 
-        segments_list.append({
-            "start": segment.start,
-            "end": segment.end,
-            "text": segment.text.strip(),
-            "words": words_list
-        })
+        segments_list.append(
+            {
+                "start": segment.start,
+                "end": segment.end,
+                "text": segment.text.strip(),
+                "words": words_list,
+            }
+        )
 
-    logger.info(f"Transcription complete: {len(segments_list)} segments, language: {info.language}")
+        # Show progress update
+        current_time = time.time()
+        if current_time - last_progress_time >= progress_interval:
+            elapsed = current_time - start_time
+            current_position = segment.end
 
-    return {
-        "language": info.language,
-        "segments": segments_list
-    }
+            if video_duration and video_duration > 0:
+                progress_pct = (current_position / video_duration) * 100
+                speed_factor = current_position / elapsed if elapsed > 0 else 0
+
+                # Estimate remaining time
+                if speed_factor > 0:
+                    remaining_duration = video_duration - current_position
+                    eta_seconds = remaining_duration / speed_factor
+                    eta_str = f"ETA: {eta_seconds / 60:.1f}min"
+                else:
+                    eta_str = "ETA: calculating..."
+
+                # Print progress bar to console
+                bar_width = 40
+                filled = int(bar_width * progress_pct / 100)
+                bar = "█" * filled + "░" * (bar_width - filled)
+
+                print(
+                    f"\r[{bar}] {progress_pct:.1f}% | "
+                    f"Position: {current_position / 60:.1f}min/{video_duration / 60:.1f}min | "
+                    f"Speed: {speed_factor:.2f}x | {eta_str}",
+                    end="",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            else:
+                # No duration info, just show position and speed
+                speed_factor = current_position / elapsed if elapsed > 0 else 0
+                print(
+                    f"\rProcessed: {current_position / 60:.1f}min | "
+                    f"Speed: {speed_factor:.2f}x | "
+                    f"Elapsed: {elapsed / 60:.1f}min",
+                    end="",
+                    file=sys.stderr,
+                    flush=True,
+                )
+
+            last_progress_time = current_time
+
+    # Clear progress line and show final stats
+    if video_duration:
+        print("\r" + " " * 120 + "\r", end="", file=sys.stderr, flush=True)
+
+    total_time = time.time() - start_time
+    speed_factor = video_duration / total_time if video_duration and total_time > 0 else 0
+
+    logger.info(
+        f"Transcription complete: {len(segments_list)} segments, "
+        f"language: {info.language}, "
+        f"time: {total_time / 60:.1f}min"
+    )
+    if speed_factor > 0:
+        logger.info(f"Average speed: {speed_factor:.2f}x realtime")
+
+    return {"language": info.language, "segments": segments_list}
