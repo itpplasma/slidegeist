@@ -1,6 +1,4 @@
-# Slidegeist
-
-Extract slides and timestamped transcripts from lecture videos with minimal dependencies.
+![slidegeist_logo](https://github.com/user-attachments/assets/97a1e482-d90c-41a0-a27c-a503043accad)
 
 ## Features
 
